@@ -1,0 +1,35 @@
+## Visual Studio & .NET build output
+.vs/
+bin/
+obj/
+*.user
+*.suo
+*.userosv
+*.userprefs
+*.sln.docstates
+
+## Packages
+*.nupkg
+packages/
+
+## VS Code
+.vscode/*
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/settings.json
+
+## OS & IDE
+.idea/
+.DS_Store
+Thumbs.db
+
+## Logs and databases
+*.log
+*.sqlite
+*.db
+Extra/logs/*.log
+
+## Config secrets
+Code/config.json
+!Code/config.example.json
+!Code/Simulators/config.json

@@ -1,0 +1,78 @@
+<Window x:Class="UDM_21.Dashboard.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="UDM_21: Giám Sát &amp; Điều Khiển IoT Qua MQTT (C# .NET 8 WPF)" Height="650" Width="1050"
+        WindowStartupLocation="CenterScreen">
+    <Grid Margin="10">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- Top Connection Bar -->
+        <GroupBox Header="Cấu Hình Kết Nối MQTT Broker" Grid.Row="0" Margin="0,0,0,10" Padding="8">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Text="Broker Host:" VerticalAlignment="Center" Margin="0,0,5,0"/>
+                <TextBox x:Name="TxtHost" Text="localhost" Width="120" VerticalAlignment="Center" Margin="0,0,15,0"/>
+
+                <TextBlock Text="Port:" VerticalAlignment="Center" Margin="0,0,5,0"/>
+                <TextBox x:Name="TxtPort" Text="1883" Width="50" VerticalAlignment="Center" Margin="0,0,15,0"/>
+
+                <Button x:Name="BtnConnect" Content="Kết Nối" Width="90" Margin="0,0,10,0" Click="BtnConnect_Click" Background="#28a745" Foreground="White" FontWeight="Bold"/>
+                <Button x:Name="BtnDisconnect" Content="Ngắt Kết Nối" Width="90" Margin="0,0,20,0" IsEnabled="False" Click="BtnDisconnect_Click" Background="#dc3545" Foreground="White" FontWeight="Bold"/>
+
+                <TextBlock x:Name="LblStatus" Text="Trạng thái: Chưa kết nối" VerticalAlignment="Center" FontWeight="Bold" Foreground="Gray"/>
+            </StackPanel>
+        </GroupBox>
+
+        <!-- Main Content Area -->
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="3*"/>
+                <ColumnDefinition Width="2*"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- Left: Device DataGrid -->
+            <GroupBox Header="Danh Sách Thiết Bị &amp; Dữ Liệu Real-Time" Grid.Column="0" Margin="0,0,5,0">
+                <DataGrid x:Name="DgDevices" AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="Device ID" Binding="{Binding DeviceId}" Width="120"/>
+                        <DataGridTextColumn Header="Loại" Binding="{Binding DeviceType}" Width="80"/>
+                        <DataGridTextColumn Header="Vị Trí" Binding="{Binding Location}" Width="80"/>
+                        <DataGridTextColumn Header="Trạng Thái" Binding="{Binding StatusText}" Width="100"/>
+                        <DataGridTextColumn Header="Tóm Tắt Dữ Liệu" Binding="{Binding LatestTelemetrySummary}" Width="*"/>
+                    </DataGrid.Columns>
+                </DataGrid>
+            </GroupBox>
+
+            <!-- Right: Control Panel & Console -->
+            <Grid Grid.Column="1" Margin="5,0,0,0">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <!-- Command Box -->
+                <GroupBox Header="Gửi Lệnh Điều Khiển (Publish Command)" Grid.Row="0" Margin="0,0,0,10" Padding="8">
+                    <StackPanel>
+                        <TextBlock Text="Chọn Thiết Bị:" Margin="0,0,0,3"/>
+                        <ComboBox x:Name="CmbDevices" DisplayMemberPath="DeviceId" Margin="0,0,0,8"/>
+
+                        <TextBlock Text="Tên Lệnh (Command):" Margin="0,0,0,3"/>
+                        <TextBox x:Name="TxtCommand" Text="TOGGLE_POWER" Margin="0,0,0,8"/>
+
+                        <TextBlock Text="Tham Số (JSON):" Margin="0,0,0,3"/>
+                        <TextBox x:Name="TxtParams" Text="{}{&quot;state&quot;: &quot;ON&quot;}" Margin="0,0,0,10"/>
+
+                        <Button x:Name="BtnSendCmd" Content="Phát Lệnh Qua MQTT" Height="30" Click="BtnSendCmd_Click" Background="#007bff" Foreground="White" FontWeight="Bold"/>
+                    </StackPanel>
+                </GroupBox>
+
+                <!-- Log Console -->
+                <GroupBox Header="Nhật Ký Sự Kiện (Event Console)" Grid.Row="1">
+                    <TextBox x:Name="TxtConsole" IsReadOnly="True" VerticalScrollBarVisibility="Auto" Background="#1E1E1E" Foreground="#00FF00" FontFamily="Consolas" TextWrapping="Wrap"/>
+                </GroupBox>
+            </Grid>
+        </Grid>
+    </Grid>
+</Window>

@@ -1,0 +1,37 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Debug WPF Dashboard",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build",
+      "program": "${workspaceFolder}/Code/Dashboard/bin/Debug/net8.0-windows/Dashboard.exe",
+      "args": [],
+      "cwd": "${workspaceFolder}/Code/Dashboard",
+      "stopAtEntry": false,
+      "console": "internalConsole"
+    },
+    {
+      "name": "Debug IoT Simulators",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build",
+      "program": "${workspaceFolder}/Code/Simulators/bin/Debug/net8.0/Simulators.exe",
+      "args": [],
+      "cwd": "${workspaceFolder}/Code/Simulators",
+      "stopAtEntry": false,
+      "console": "integratedTerminal"
+    }
+  ],
+  "compounds": [
+    {
+      "name": "🚀 Debug All (Simulators + Dashboard)",
+      "configurations": [
+        "Debug IoT Simulators",
+        "Debug WPF Dashboard"
+      ],
+      "stopAll": true
+    }
+  ]
+}

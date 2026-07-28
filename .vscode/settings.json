@@ -1,0 +1,8 @@
+{
+  "dotnet.defaultSolution": "Code/UDM_21.sln",
+  "omnisharp.enableRoslynAnalyzers": true,
+  "files.exclude": {
+    "**/bin": true,
+    "**/obj": true
+  }
+}

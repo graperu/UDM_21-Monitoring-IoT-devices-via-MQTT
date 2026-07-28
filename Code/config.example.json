@@ -1,0 +1,20 @@
+{
+  "broker": {
+    "host": "localhost",
+    "port": 1883,
+    "keepalive": 60,
+    "username": "",
+    "password": ""
+  },
+  "topics": {
+    "telemetry_wildcard": "iot/+/+/+/telemetry",
+    "status_wildcard": "iot/+/+/+/status",
+    "command_pattern": "iot/{location}/{device_type}/{device_id}/cmd"
+  },
+  "thresholds": {
+    "temperature_max": 40.0,
+    "humidity_max": 85.0,
+    "air_quality_aqi_max": 150.0,
+    "power_watt_max": 3000.0
+  }
+}

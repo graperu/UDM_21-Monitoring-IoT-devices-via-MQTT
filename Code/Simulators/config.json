@@ -1,0 +1,43 @@
+{
+  "broker": {
+    "host": "localhost",
+    "port": 1883
+  },
+  "devices": [
+    {
+      "id": "temp_hum_01",
+      "type": "sensor",
+      "location": "lab",
+      "name": "Nhiệt Độ - Độ Ẩm Phòng Lab",
+      "publish_interval": 3
+    },
+    {
+      "id": "air_quality_01",
+      "type": "sensor",
+      "location": "factory",
+      "name": "Cảm Biến Chất Lượng Không Khí",
+      "publish_interval": 4
+    },
+    {
+      "id": "power_meter_01",
+      "type": "meter",
+      "location": "home",
+      "name": "Công Tơ Điện Thông Minh",
+      "publish_interval": 2
+    },
+    {
+      "id": "smart_light_01",
+      "type": "light",
+      "location": "home",
+      "name": "Đèn Thông Minh Phòng Khách",
+      "publish_interval": 5
+    },
+    {
+      "id": "door_sensor_01",
+      "type": "security",
+      "location": "lab",
+      "name": "Cảm Biến Cửa Ra Vào",
+      "publish_interval": 5
+    }
+  ]
+}
