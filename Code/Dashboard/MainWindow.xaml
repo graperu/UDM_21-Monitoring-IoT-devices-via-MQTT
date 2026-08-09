@@ -48,7 +48,7 @@
             </GroupBox>
 
             <!-- Right: Control Panel & Console -->
-            <Grid Grid.Column="1" Margin="5,0,0,0" >
+            <Grid Grid.Column="1" Margin="5,0,0,0">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="*"/>
@@ -70,7 +70,7 @@
                     </StackPanel>
                 </GroupBox>
 
-                <!-- Nhật Ký Sự Kiện (Log Console) dùng ListBox -->
+                <!-- Nhật Ký Sự Kiện (Log Console) -->
                 <GroupBox Header="Log Console" Grid.Row="1" VerticalAlignment="Stretch">
                     <ListBox x:Name="LbConsole"
                                  Background="#1E1E1E" 
@@ -81,10 +81,9 @@
                                  ScrollViewer.VerticalScrollBarVisibility="Auto"
                                  MaxHeight="{Binding Path=ActualHeight, RelativeSource={RelativeSource AncestorType=Window}}">
                         <ListBox.Resources>
-                            <!-- 1. Template Cho Thanh Cuộn Dọc (Vertical ScrollBar) -->
+                            <!-- Template Vertical ScrollBar -->
                             <ControlTemplate x:Key="VerticalScrollBarTemplate" TargetType="ScrollBar">
                                 <Grid x:Name="Bg" Background="Transparent">
-                                    <!-- Thanh Dọc: IsDirectionReversed="True" để 0 ở trên đỉnh -->
                                     <Track x:Name="PART_Track" IsDirectionReversed="True">
                                         <Track.Thumb>
                                             <Thumb>
@@ -107,10 +106,9 @@
                                 </Grid>
                             </ControlTemplate>
 
-                            <!-- 2. Template Cho Thanh Cuộn Ngang (Horizontal ScrollBar) -->
+                            <!-- 2. Template Horizontal ScrollBar -->
                             <ControlTemplate x:Key="HorizontalScrollBarTemplate" TargetType="ScrollBar">
                                 <Grid x:Name="Bg" Background="Transparent">
-                                    <!-- Thanh Ngang: IsDirectionReversed="False" để 0 ở bên trái -->
                                     <Track x:Name="PART_Track" IsDirectionReversed="False">
                                         <Track.Thumb>
                                             <Thumb>
@@ -133,18 +131,18 @@
                                 </Grid>
                             </ControlTemplate>
 
-                            <!-- 3. Style Phân Loại Chiều Ngang / Dọc Để Áp Dụng Đúng Template -->
+                            <!-- Phân loại Template ngang, dọc-->
                             <Style TargetType="ScrollBar">
                                 <Setter Property="Background" Value="Transparent"/>
                                 <Setter Property="Stylus.IsPressAndHoldEnabled" Value="False"/>
                                 <Setter Property="Stylus.IsFlicksEnabled" Value="False"/>
                                 <Style.Triggers>
-                                    <!-- Áp dụng Template riêng cho thanh Dọc -->
+                                    <!-- Template riêng cho thanh Dọc -->
                                     <Trigger Property="Orientation" Value="Vertical">
                                         <Setter Property="Width" Value="4"/>
                                         <Setter Property="Template" Value="{StaticResource VerticalScrollBarTemplate}"/>
                                     </Trigger>
-                                    <!-- Áp dụng Template riêng cho thanh Ngang -->
+                                    <!-- Template riêng cho thanh Ngang -->
                                     <Trigger Property="Orientation" Value="Horizontal">
                                         <Setter Property="Height" Value="4"/>
                                         <Setter Property="Template" Value="{StaticResource HorizontalScrollBarTemplate}"/>
@@ -164,7 +162,7 @@
                                              BorderThickness="0"/>
                             </DataTemplate>
                         </ListBox.ItemTemplate>
-                        <!-- Tùy chỉnh ItemContainerStyle để xóa viền chọn thô kệch mặc định của ListBox -->
+                        <!-- ItemContainerStyle Style lại viền của listBox-->
                         <ListBox.ItemContainerStyle>
                             <Style TargetType="ListBoxItem">
                                 <Setter Property="Padding" Value="2,1"/>
