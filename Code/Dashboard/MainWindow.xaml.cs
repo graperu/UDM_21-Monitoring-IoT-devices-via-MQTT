@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Windows;
@@ -6,20 +7,30 @@ using System.Windows.Media;
 using Newtonsoft.Json;
 using UDM_21.Dashboard.Controllers;
 using UDM_21.Dashboard.Models;
+using UDM_21.Dashboard.Services;
 
 namespace UDM_21.Dashboard
 {
     public partial class MainWindow : Window
     {
         private readonly MqttController _mqttController;
-        private readonly ObservableCollection<DeviceItem> _devices = new ObservableCollection<DeviceItem>();
-        private readonly ObservableCollection<string> _logMessages = new ObservableCollection<string>();
+        private readonly ObservableCollection<DeviceItem> _devices =
+            new ObservableCollection<DeviceItem>();
+        private readonly ObservableCollection<string> _logMessages =
+            new ObservableCollection<string>();
+        private readonly TelemetryHistoryManager _historyManager;
+
         private const int MaxLogLines = 200;
 
         public MainWindow()
         {
             InitializeComponent();
+
             _mqttController = new MqttController();
+            _historyManager = new TelemetryHistoryManager();
+
+            _mqttController.TelemetryReceived +=
+                _historyManager.AddTelemetry;
 
             DgDevices.ItemsSource = _devices;
             CmbDevices.ItemsSource = _devices;
@@ -33,13 +44,18 @@ namespace UDM_21.Dashboard
         private async void BtnConnect_Click(object sender, RoutedEventArgs e)
         {
             string host = TxtHost.Text.Trim();
+
             if (int.TryParse(TxtPort.Text.Trim(), out int port))
             {
                 await _mqttController.ConnectAsync(host, port);
             }
             else
             {
-                MessageBox.Show("Port không hợp lệ!", "Lỗi", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(
+                    "Port không hợp lệ!",
+                    "Lỗi",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
             }
         }
 
@@ -53,6 +69,7 @@ namespace UDM_21.Dashboard
             Dispatcher.Invoke(() =>
             {
                 LblStatus.Text = $"Trạng thái: {message}";
+
                 if (isConnected)
                 {
                     LblStatus.Foreground = Brushes.Green;
@@ -74,7 +91,9 @@ namespace UDM_21.Dashboard
         {
             Dispatcher.Invoke(() =>
             {
-                var dev = _devices.FirstOrDefault(d => d.DeviceId == msg.DeviceId);
+                var dev = _devices.FirstOrDefault(
+                    d => d.DeviceId == msg.DeviceId);
+
                 if (dev == null)
                 {
                     dev = new DeviceItem
@@ -84,62 +103,106 @@ namespace UDM_21.Dashboard
                         Location = msg.Location,
                         IsOnline = true
                     };
+
                     _devices.Add(dev);
                 }
 
                 dev.IsOnline = true;
                 dev.LastSeen = DateTime.Now.ToString("T");
                 dev.RawTelemetryData = msg.Data;
-                dev.LatestTelemetrySummary = JsonConvert.SerializeObject(msg.Data);
 
-                LogConsole($"[TELEMETRY] {msg.DeviceId}: {dev.LatestTelemetrySummary}");
+                var history =
+                    _historyManager.GetHistory(msg.DeviceId);
+
+                dev.LatestTelemetrySummary =
+                    JsonConvert.SerializeObject(msg.Data);
+
+                LogConsole(
+                    $"[TELEMETRY] {msg.DeviceId}: " +
+                    $"{dev.LatestTelemetrySummary}");
+
+                LogConsole(
+                    $"[HISTORY] {msg.DeviceId}: " +
+                    $"Đã lưu {history.Count}/20 dữ liệu gần nhất");
             });
         }
 
-        private void OnDeviceStatusReceived(Shared.DeviceStatusMessage statusMsg)
+        private void OnDeviceStatusReceived(
+            Shared.DeviceStatusMessage statusMsg)
         {
             Dispatcher.Invoke(() =>
             {
-                var dev = _devices.FirstOrDefault(d => d.DeviceId == statusMsg.DeviceId);
+                var dev = _devices.FirstOrDefault(
+                    d => d.DeviceId == statusMsg.DeviceId);
+
                 if (dev == null)
                 {
                     dev = new DeviceItem
                     {
                         DeviceId = statusMsg.DeviceId,
-                        IsOnline = statusMsg.Status.ToLower() == "online"
+                        IsOnline =
+                            statusMsg.Status.ToLower() == "online"
                     };
+
                     _devices.Add(dev);
                 }
                 else
                 {
-                    dev.IsOnline = statusMsg.Status.ToLower() == "online";
+                    dev.IsOnline =
+                        statusMsg.Status.ToLower() == "online";
                 }
 
                 dev.LastSeen = DateTime.Now.ToString("T");
-                LogConsole($"[STATUS] Device {statusMsg.DeviceId} is {statusMsg.Status.ToUpper()}");
+
+                LogConsole(
+                    $"[STATUS] Device {statusMsg.DeviceId} " +
+                    $"is {statusMsg.Status.ToUpper()}");
             });
         }
 
-        private async void BtnSendCmd_Click(object sender, RoutedEventArgs e)
+        private async void BtnSendCmd_Click(
+            object sender,
+            RoutedEventArgs e)
         {
             if (CmbDevices.SelectedItem is not DeviceItem selectedDev)
             {
-                MessageBox.Show("Vui lòng chọn thiết bị!", "Cảnh báo", MessageBoxButton.OK, MessageBoxImage.Warning);
+                MessageBox.Show(
+                    "Vui lòng chọn thiết bị!",
+                    "Cảnh báo",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+
                 return;
             }
 
             string cmd = TxtCommand.Text.Trim();
+
             try
             {
-                var paramsDict = JsonConvert.DeserializeObject<System.Collections.Generic.Dictionary<string, object>>(TxtParams.Text.Trim())
-                                 ?? new System.Collections.Generic.Dictionary<string, object>();
+                var paramsDict =
+                    JsonConvert.DeserializeObject<
+                        Dictionary<string, object>>(
+                            TxtParams.Text.Trim())
+                    ?? new Dictionary<string, object>();
 
-                await _mqttController.SendCommandAsync(selectedDev.Location, selectedDev.DeviceType, selectedDev.DeviceId, cmd, paramsDict);
-                LogConsole($"[COMMAND SENT] To {selectedDev.DeviceId}: {cmd}");
+                await _mqttController.SendCommandAsync(
+                    selectedDev.Location,
+                    selectedDev.DeviceType,
+                    selectedDev.DeviceId,
+                    cmd,
+                    paramsDict);
+
+                LogConsole(
+                    $"[COMMAND SENT] To " +
+                    $"{selectedDev.DeviceId}: {cmd}");
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Cú pháp JSON không hợp lệ: {ex.Message}", "Lỗi", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(
+                    $"Cú pháp JSON không hợp lệ: {ex.Message}",
+                    "Lỗi",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
             }
         }
 
@@ -147,7 +210,9 @@ namespace UDM_21.Dashboard
         {
             Dispatcher.Invoke(() =>
             {
-                string formattedMessage = $"[{DateTime.Now:HH:mm:ss}] {message}";
+                string formattedMessage =
+                    $"[{DateTime.Now:HH:mm:ss}] {message}";
+
                 _logMessages.Add(formattedMessage);
 
                 if (_logMessages.Count > MaxLogLines)
@@ -157,9 +222,10 @@ namespace UDM_21.Dashboard
 
                 if (LbConsole.Items.Count > 0)
                 {
-                    LbConsole.ScrollIntoView(LbConsole.Items[LbConsole.Items.Count - 1]);
+                    LbConsole.ScrollIntoView(
+                        LbConsole.Items[
+                            LbConsole.Items.Count - 1]);
                 }
-
             });
         }
     }
