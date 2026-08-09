@@ -27,7 +27,7 @@ namespace UDM_21.Simulators
             Location = location;
             PublishIntervalSeconds = publishIntervalSeconds;
 
-            Mqtt = new MqttHelper($"sim_{DeviceId}");
+            Mqtt = new MqttHelper($"sim_{DeviceId}_{Guid.NewGuid().ToString("N").Substring(0, 4)}");
             Mqtt.MessageReceivedAsync += OnMessageReceivedAsync;
 
             // Moi khi ket noi (bao gom ca lan dau va cac lan RECONNECT sau khi rot mang),

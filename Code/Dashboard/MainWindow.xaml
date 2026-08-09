@@ -15,7 +15,7 @@
         <GroupBox Header="Cấu Hình Kết Nối MQTT Broker" Grid.Row="0" Margin="0,0,0,10" Padding="8">
             <StackPanel Orientation="Horizontal">
                 <TextBlock Text="Broker Host:" VerticalAlignment="Center" Margin="0,0,5,0"/>
-                <TextBox x:Name="TxtHost" Text="localhost" Width="120" VerticalAlignment="Center" Margin="0,0,15,0"/>
+                <TextBox x:Name="TxtHost" Text="broker.emqx.io" Width="120" VerticalAlignment="Center" Margin="0,0,15,0"/>
 
                 <TextBlock Text="Port:" VerticalAlignment="Center" Margin="0,0,5,0"/>
                 <TextBox x:Name="TxtPort" Text="1883" Width="50" VerticalAlignment="Center" Margin="0,0,15,0"/>
@@ -56,6 +56,10 @@
                                                     <Style.Triggers>
                                                         <DataTrigger Binding="{Binding StatusText}" Value="Online">
                                                             <Setter Property="Fill" Value="LimeGreen"/>
+                                                        </DataTrigger>
+
+                                                        <DataTrigger Binding="{Binding StatusText}" Value="⚠️ Cảnh báo">
+                                                            <Setter Property="Fill" Value="OrangeRed"/>
                                                         </DataTrigger>
 
                                                         <DataTrigger Binding="{Binding StatusText}" Value="Offline">

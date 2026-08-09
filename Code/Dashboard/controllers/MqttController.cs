@@ -12,9 +12,10 @@ namespace UDM_21.Dashboard.Controllers
         public event Action<TelemetryMessage>? TelemetryReceived;
         public event Action<DeviceStatusMessage>? DeviceStatusReceived;
 
-        public MqttController(string clientId = "WpfDashboard_Client")
+        public MqttController(string? clientId = null)
         {
-            _mqtt = new MqttHelper(clientId, cleanSession: false);
+            string uniqueId = clientId ?? $"WpfDashboard_{Guid.NewGuid().ToString("N").Substring(0, 6)}";
+            _mqtt = new MqttHelper(uniqueId, cleanSession: true);
             _mqtt.ConnectionChangedAsync += OnConnectionChangedAsync;
             _mqtt.ReconnectingAsync += OnReconnectingAsync;
             _mqtt.MessageReceivedAsync += OnMessageReceivedAsync;

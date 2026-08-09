@@ -2,18 +2,20 @@
 
 > **Đề tài UDM_21:** Giám sát thiết bị IoT qua MQTT.  
 > **Ứng dụng:** C# .NET 8 WPF Desktop Dashboard App & C# Console App Giả lập 5+ thiết bị IoT.  
-> **Môn học:** Lập Trình Mạng (Network Programming).
+> **Môn học:** Lập Trình Mạng (Network Programming).  
+> **Số lượng thành viên:** 5 Sinh viên.
 
 ---
 
-## 👥 1. Danh sách Thành viên Nhóm & Phân công Công việc
+## 👥 1. Danh sách Thành viên Nhóm & Phân công Công việc (5 Thành Viên)
 
 | STT | Họ và tên | Mã Sinh Viên | Vai Trò / Nhiệm Vụ Phân Công | Thư Mục / File Đảm Nhận | GitHub Account |
 |---|---|---|---|---|---|
-| 1 | [Họ tên SV 1] | [MSSV 1] | **Trưởng nhóm:** Phát triển Giao diện WPF Dashboard GUI, Event Handling | `Code/Dashboard/` | `@account1` |
-| 2 | [Họ tên SV 2] | [MSSV 2] | Phát triển các Thiết bị IoT giả lập (5+ Devices, Multi-threading) | `Code/Simulators/` | `@account2` |
-| 3 | [Họ tên SV 3] | [MSSV 3] | Xử lý Giao thức Mạng MQTT, QoS, Reconnect, LWT, Data Contract JSON | `Code/Shared/` | `@account3` |
-| 4 | [Họ tên SV 4] | [MSSV 4] | Kiểm thử Mạng (Stress Test, Latency), Viết Báo cáo (.docx) & Slide (.pptx) | `Extra/`, `DOCX/`, `PPTX/` | `@account4` |
+| 1 | [Họ tên SV 1] | [MSSV 1] | **Trưởng nhóm:** Thiết kế & Lập trình Giao diện Dashboard GUI (WPF XAML, DataBinding, Layout) | `Code/Dashboard/MainWindow.xaml`<br>`Code/Dashboard/App.xaml` | `@account1` |
+| 2 | [Họ tên SV 2] | [MSSV 2] | **Lập trình Logic Dashboard:** Event Handler, Controller & Dispatcher không làm treo GUI | `Code/Dashboard/Controllers/`<br>`Code/Dashboard/Models/`<br>`Code/Dashboard/MainWindow.xaml.cs` | `@account2` |
+| 3 | [Họ tên SV 3] | [MSSV 3] | **Lập trình Thiết bị Giả lập:** Multi-threading 5 IoT Devices, Vòng lặp Telemetry, LWT Status | `Code/Simulators/DeviceBase.cs`<br>`Code/Simulators/Devices/`<br>`Code/Simulators/Program.cs` | `@account3` |
+| 4 | [Họ tên SV 4] | [MSSV 4] | **Lập trình Giao thức Mạng Cốt lõi:** Wrapper MQTTnet, Pub/Sub, QoS 0/1, Reconnect, JSON Protocol | `Code/Shared/MqttHelper.cs`<br>`Code/Shared/Protocol.cs`<br>`Code/Shared/Shared.csproj` | `@account4` |
+| 5 | [Họ tên SV 5] | [MSSV 5] | **Kiểm thử & Báo cáo:** Stress Test, Performance Test, Đo độ trễ, Viết Báo cáo (.docx) & Slide (.pptx) | `Extra/scripts/stress_test.py`<br>`DOCX/`<br>`PPTX/` | `@account5` |
 
 ---
 
@@ -61,13 +63,13 @@ Các topic được thiết kế phân cấp chuẩn: `iot/{location}/{device_ty
 - **Retained Message:**
   - Được dùng trên các Topic `status`. Khi Dashboard vừa khởi động và Subscribe, MQTT Broker sẽ lập tức gửi lại trạng thái mới nhất của các thiết bị mà không cần chờ thiết bị phát tin mới.
 - **Last Will and Testament (LWT):**
-  - Cấu hình cho Broker biết: nếu thiết bị IoT bị ngắt kết nối ngột ngột (mất mạng, rớt cáp, tắt nguồn), Broker sẽ thay mặt thiết bị Publish tin nhắn `status: offline` đến Dashboard.
+  - Cấu hình cho Broker biết: nếu thiết bị IoT bị ngắt kết nối đột ngột (mất mạng, rớt cáp, tắt nguồn), Broker sẽ thay mặt thiết bị Publish tin nhắn `status: offline` đến Dashboard.
 - **Clean Session / Persistent Session:**
   - Simulators sử dụng Clean Session để kết nối nhanh. Dashboard hỗ trợ nhận lại dữ liệu lệnh/cảnh báo nhỡ khi bị mất kết nối tạm thời.
 
 ---
 
-## 📁 5. Cấu trúc Thư mục Repository
+## 📁 5. Cấu trúc Thư mục Repository & Phân chia Code
 
 ```text
 UDM_21-Monitoring-IoT-devices-via-MQTT/
@@ -77,28 +79,28 @@ UDM_21-Monitoring-IoT-devices-via-MQTT/
 │   └── settings.json              # Chỉ định UDM_21.sln mặc định
 ├── Code/                          # Mã nguồn chính C# .NET 8
 │   ├── UDM_21.sln                 # Visual Studio Solution File
-│   ├── Dashboard/                 # WPF Desktop Dashboard App (Thành viên 1)
-│   │   ├── Controllers/           # MqttController (Giao tiếp MQTTnet & WPF Dispatcher)
-│   │   ├── Models/                # DeviceItem (INotifyPropertyChanged DataBinding)
+│   ├── Dashboard/                 # WPF Desktop Dashboard App (Thành viên 1 & Thành viên 2)
+│   │   ├── Controllers/           # MqttController (Giao tiếp MQTTnet & WPF Dispatcher) - TV 2
+│   │   ├── Models/                # DeviceItem (INotifyPropertyChanged DataBinding) - TV 2
 │   │   ├── App.xaml / App.xaml.cs
-│   │   ├── MainWindow.xaml        # Giao diện WPF (DataGrid, Form phát lệnh, Console Log)
-│   │   └── MainWindow.xaml.cs     # Event Handler (Xử lý không treo GUI)
-│   ├── Simulators/                # C# Console App Giả lập 5+ Thiết bị (Thành viên 2)
-│   │   ├── Devices/               # 5 loại thiết bị cảm biến & công tơ điện
-│   │   ├── DeviceBase.cs          # Abstract class thiết bị IoT (Multi-threading, LWT)
-│   │   ├── Program.cs             # Khởi chạy đồng thời 5 thiết bị
-│   │   └── config.json            # Cấu hình các thiết bị giả lập
-│   ├── Shared/                    # Class Library dùng chung (Thành viên 3)
-│   │   ├── MqttHelper.cs          # Wrapper gói thư viện MQTTnet v4.x
-│   │   └── Protocol.cs            # Data Contract JSON (Telemetry, Status, Command)
+│   │   ├── MainWindow.xaml        # Giao diện WPF (DataGrid, Form phát lệnh, Console Log) - TV 1
+│   │   └── MainWindow.xaml.cs     # Event Handler (Xử lý không treo GUI) - TV 2
+│   ├── Simulators/                # C# Console App Giả lập 5+ Thiết bị (Thành viên 3)
+│   │   ├── Devices/               # 5 loại thiết bị cảm biến & công tơ điện - TV 3
+│   │   ├── DeviceBase.cs          # Abstract class thiết bị IoT (Multi-threading, LWT) - TV 3
+│   │   ├── Program.cs             # Khởi chạy đồng thời 5 thiết bị - TV 3
+│   │   └── config.json            # Cấu hình các thiết bị giả lập - TV 3
+│   ├── Shared/                    # Class Library dùng chung (Thành viên 4)
+│   │   ├── MqttHelper.cs          # Wrapper gói thư viện MQTTnet v4.x - TV 4
+│   │   └── Protocol.cs            # Data Contract JSON (Telemetry, Status, Command) - TV 4
 │   └── config.example.json        # Cấu hình MQTT Broker mẫu
-├── DOCX/                          # Nơi lưu báo cáo bài tập lớn (.docx) (Thành viên 4)
+├── DOCX/                          # Nơi lưu báo cáo bài tập lớn (.docx) (Thành viên 5)
 │   └── README.md
-├── Extra/                         # Thư mục logs & kết quả kiểm thử (Thành viên 4)
-│   ├── logs/                      # Nhật ký hệ thống
-│   ├── test_results/              # Kết quả stress test / performance test
-│   └── scripts/                   # Script kiểm thử độ trễ & throughput
-├── PPTX/                          # Slide thuyết trình bảo vệ (.pptx) (Thành viên 4)
+├── Extra/                         # Thư mục logs & kết quả kiểm thử (Thành viên 5)
+│   ├── logs/                      # Nhật ký hệ thống - TV 5
+│   ├── test_results/              # Kết quả stress test / performance test - TV 5
+│   └── scripts/                   # Script kiểm thử độ trễ & throughput - TV 5
+├── PPTX/                          # Slide thuyết trình bảo vệ (.pptx) (Thành viên 5)
 │   └── README.md
 ├── .gitignore                     # Gitignore chuẩn C# / Visual Studio (.NET)
 └── README.md                      # Tài liệu hướng dẫn & thông tin dự án

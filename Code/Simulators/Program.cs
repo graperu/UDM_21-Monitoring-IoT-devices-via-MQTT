@@ -13,8 +13,8 @@ namespace UDM_21.Simulators
             Console.WriteLine(" UDM_21: IoT Devices Simulator (.NET 8)");
             Console.WriteLine("==============================================");
 
-            string host = "localhost";
-            int port = 1883;
+            string host = args.Length > 0 ? args[0] : "localhost";
+            int port = args.Length > 1 && int.TryParse(args[1], out int p) ? p : 1883;
 
             var devices = new List<DeviceBase>
             {

@@ -39,6 +39,13 @@ namespace UDM_21.Dashboard
             _mqttController.ConnectionStatusChanged += OnConnectionStatusChanged;
             _mqttController.TelemetryReceived += OnTelemetryReceived;
             _mqttController.DeviceStatusReceived += OnDeviceStatusReceived;
+
+            Loaded += MainWindow_Loaded;
+        }
+
+        private void MainWindow_Loaded(object sender, RoutedEventArgs e)
+        {
+            BtnConnect_Click(this, new RoutedEventArgs());
         }
 
         private async void BtnConnect_Click(object sender, RoutedEventArgs e)
@@ -117,9 +124,39 @@ namespace UDM_21.Dashboard
                 dev.LatestTelemetrySummary =
                     JsonConvert.SerializeObject(msg.Data);
 
-                LogConsole(
-                    $"[TELEMETRY] {msg.DeviceId}: " +
-                    $"{dev.LatestTelemetrySummary}");
+                // Kiểm tra ngưỡng bất thường để cảnh báo
+                bool isWarning = false;
+                string warningDetail = "";
+
+                if (msg.Data.TryGetValue("temperature", out var tempObj) && double.TryParse(tempObj?.ToString(), out double tempVal) && tempVal > 40.0)
+                {
+                    isWarning = true;
+                    warningDetail = $"Nhiệt độ vượt ngưỡng: {tempVal}°C (> 40°C)";
+                }
+                else if (msg.Data.TryGetValue("power_watt", out var pwrObj) && double.TryParse(pwrObj?.ToString(), out double pwrVal) && pwrVal > 3000.0)
+                {
+                    isWarning = true;
+                    warningDetail = $"Công suất quá tải: {pwrVal}W (> 3000W)";
+                }
+                else if (msg.Data.TryGetValue("aqi", out var aqiObj) && double.TryParse(aqiObj?.ToString(), out double aqiVal) && aqiVal > 150.0)
+                {
+                    isWarning = true;
+                    warningDetail = $"Chất lượng không khí xấu: AQI {aqiVal} (> 150)";
+                }
+
+                dev.HasWarning = isWarning;
+                dev.WarningMessage = warningDetail;
+
+                if (isWarning)
+                {
+                    LogConsole($"🚨 [CẢNH BÁO BẤT THƯỜNG] {msg.DeviceId}: {warningDetail}");
+                }
+                else
+                {
+                    LogConsole(
+                        $"[TELEMETRY] {msg.DeviceId}: " +
+                        $"{dev.LatestTelemetrySummary}");
+                }
 
                 LogConsole(
                     $"[HISTORY] {msg.DeviceId}: " +

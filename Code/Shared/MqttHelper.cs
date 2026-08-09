@@ -54,7 +54,7 @@ namespace UDM_21.Shared
             _cleanSession = cleanSession;
             _factory = new MqttFactory();
             _client = _factory.CreateMqttClient();
-
+ 
             // Đăng ký sự kiện từ thư viện MQTTnet
             _client.ConnectedAsync += OnConnectedAsync;
             _client.DisconnectedAsync += OnDisconnectedAsync;

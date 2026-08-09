@@ -23,17 +23,48 @@ namespace UDM_21.Simulators.Devices
             };
         }
 
-        protected override Task HandleCommandAsync(CommandMessage cmd)
+        protected override async Task HandleCommandAsync(CommandMessage cmd)
         {
-            base.HandleCommandAsync(cmd);
+            await base.HandleCommandAsync(cmd);
+            bool stateChanged = false;
+
             if (cmd.Command == "TOGGLE_POWER")
             {
-                if (cmd.Params.TryGetValue("state", out var stateObj))
+                if (cmd.Params.TryGetValue("state", out var stateObj) && stateObj != null)
                 {
-                    _state = stateObj?.ToString() ?? "OFF";
+                    _state = stateObj.ToString()?.ToUpper() ?? (_state == "ON" ? "OFF" : "ON");
+                }
+                else
+                {
+                    _state = _state == "ON" ? "OFF" : "ON";
+                }
+                stateChanged = true;
+            }
+            else if (cmd.Command == "SET_BRIGHTNESS" && cmd.Params.TryGetValue("brightness", out var bObj) && bObj != null)
+            {
+                if (int.TryParse(bObj.ToString(), out int newB))
+                {
+                    _brightness = Math.Clamp(newB, 0, 100);
+                    _state = _brightness > 0 ? "ON" : "OFF";
+                    stateChanged = true;
                 }
             }
-            return Task.CompletedTask;
+
+            if (stateChanged)
+            {
+                Console.WriteLine($"[Device {DeviceId}] 💡 PHẢN HỒI LỆNH: Đèn đã thực sự {(_state == "ON" ? "BẬT" : "TẮT")} (Độ sáng: {(_state == "ON" ? _brightness : 0)}%)!");
+
+                // Ngay lập tức gửi Telemetry mới để Dashboard phản hồi tức thì
+                var data = GenerateTelemetry();
+                var msg = new TelemetryMessage
+                {
+                    DeviceId = DeviceId,
+                    DeviceType = DeviceType,
+                    Location = Location,
+                    Data = data
+                };
+                await Mqtt.PublishAsync(TelemetryTopic, msg.ToJson(), MQTTnet.Protocol.MqttQualityOfServiceLevel.AtLeastOnce);
+            }
         }
     }
 }
