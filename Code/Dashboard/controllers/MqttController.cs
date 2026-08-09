@@ -16,6 +16,7 @@ namespace UDM_21.Dashboard.Controllers
         {
             _mqtt = new MqttHelper(clientId, cleanSession: false);
             _mqtt.ConnectionChangedAsync += OnConnectionChangedAsync;
+            _mqtt.ReconnectingAsync += OnReconnectingAsync;
             _mqtt.MessageReceivedAsync += OnMessageReceivedAsync;
         }
 
@@ -53,12 +54,21 @@ namespace UDM_21.Dashboard.Controllers
             if (isConnected)
             {
                 ConnectionStatusChanged?.Invoke(true, "Đã kết nối thành công!");
+                // Luu y: MqttHelper da tu dong subscribe lai cac topic sau reconnect,
+                // nen goi lai o day (lan dau + cac lan sau) van an toan, khong gay loi hay trung du lieu.
                 await SubscribeWildcardTopicsAsync();
             }
             else
             {
-                ConnectionStatusChanged?.Invoke(false, "Mất kết nối với MQTT Broker!");
+                ConnectionStatusChanged?.Invoke(false, "Mất kết nối với MQTT Broker! Đang thử kết nối lại...");
             }
+        }
+
+        // Duoc MqttHelper goi moi lan chuan bi thu ket noi lai, kem so lan da thu
+        private Task OnReconnectingAsync(int attempt)
+        {
+            ConnectionStatusChanged?.Invoke(false, $"Mất kết nối - đang thử kết nối lại (lần {attempt})...");
+            return Task.CompletedTask;
         }
 
         private Task OnMessageReceivedAsync(string topic, string payload, MQTTnet.Protocol.MqttQualityOfServiceLevel qos, bool retain)
