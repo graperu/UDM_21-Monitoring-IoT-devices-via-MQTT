@@ -29,6 +29,10 @@ namespace UDM_21.Simulators
 
             Mqtt = new MqttHelper($"sim_{DeviceId}");
             Mqtt.MessageReceivedAsync += OnMessageReceivedAsync;
+
+            // Moi khi ket noi (bao gom ca lan dau va cac lan RECONNECT sau khi rot mang),
+            // tu dong publish lai trang thai "online" (retained) de Dashboard luon hien thi dung.
+            Mqtt.ConnectionChangedAsync += OnMqttConnectionChangedAsync;
         }
 
         public async Task StartAsync(string brokerHost = "localhost", int brokerPort = 1883)
@@ -38,11 +42,11 @@ namespace UDM_21.Simulators
             var lwtStatus = new DeviceStatusMessage { DeviceId = DeviceId, Status = "offline" };
             await Mqtt.ConnectAsync(brokerHost, brokerPort, StatusTopic, lwtStatus.ToJson());
 
-            // Publish retained online status
-            var onlineStatus = new DeviceStatusMessage { DeviceId = DeviceId, Status = "online" };
-            await Mqtt.PublishAsync(StatusTopic, onlineStatus.ToJson(), MQTTnet.Protocol.MqttQualityOfServiceLevel.AtLeastOnce, retain: true);
+            // Luu y: KHONG publish "online" o day nua - viec nay da duoc chuyen vao
+            // OnMqttConnectionChangedAsync() de tu dong chay lai moi khi (re)connect thanh cong.
 
-            // Subscribe to command topic
+            // Subscribe topic lenh dieu khien - MqttHelper se tu dong subscribe lai
+            // sau moi lan reconnect, khong can lam gi them o day.
             await Mqtt.SubscribeAsync(CmdTopic);
 
             // Start telemetry publish loop
@@ -78,6 +82,9 @@ namespace UDM_21.Simulators
                 }
                 catch (Exception ex)
                 {
+                    // Neu dang mat ket noi, PublishAsync co the nem loi - bo qua chu ky nay,
+                    // vong lap TelemetryLoopAsync van tiep tuc chay o chu ky ke tiep.
+                    // MqttHelper se tu lo viec ket noi lai o cho khac.
                     Console.WriteLine($"[Device {DeviceId}] Telemetry error: {ex.Message}");
                 }
 
@@ -104,6 +111,21 @@ namespace UDM_21.Simulators
                 }
             }
             return Task.CompletedTask;
+        }
+
+        // Duoc goi moi khi trang thai ket noi MQTT thay doi (ket noi lan dau, mat ket noi, hoac reconnect thanh cong)
+        private async Task OnMqttConnectionChangedAsync(bool isConnected)
+        {
+            if (isConnected)
+            {
+                var onlineStatus = new DeviceStatusMessage { DeviceId = DeviceId, Status = "online" };
+                await Mqtt.PublishAsync(StatusTopic, onlineStatus.ToJson(), MQTTnet.Protocol.MqttQualityOfServiceLevel.AtLeastOnce, retain: true);
+                Console.WriteLine($"[Device {DeviceId}] (Re)connected to Broker - published online status.");
+            }
+            else
+            {
+                Console.WriteLine($"[Device {DeviceId}] Disconnected from Broker.");
+            }
         }
     }
 }
