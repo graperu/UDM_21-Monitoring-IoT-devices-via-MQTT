@@ -41,7 +41,35 @@
                         <DataGridTextColumn Header="Device ID" Binding="{Binding DeviceId}" Width="120"/>
                         <DataGridTextColumn Header="Loại" Binding="{Binding DeviceType}" Width="80"/>
                         <DataGridTextColumn Header="Vị Trí" Binding="{Binding Location}" Width="80"/>
-                        <DataGridTextColumn Header="Trạng Thái" Binding="{Binding StatusText}" Width="100"/>
+                        <DataGridTemplateColumn Header="Trạng thái" Width="120">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="5,0">
+
+                                        <TextBlock Text="{Binding StatusText}" VerticalAlignment="Center"/>
+
+                                        <Ellipse Width="8" Height="8" Margin="6,0,0,0" VerticalAlignment="Center">
+                                            <Ellipse.Style>
+                                                <Style TargetType="Ellipse">
+                                                    <Setter Property="Fill" Value="Gray"/>
+
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding StatusText}" Value="Online">
+                                                            <Setter Property="Fill" Value="LimeGreen"/>
+                                                        </DataTrigger>
+
+                                                        <DataTrigger Binding="{Binding StatusText}" Value="Offline">
+                                                            <Setter Property="Fill" Value="Red"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Ellipse.Style>
+                                        </Ellipse>
+
+                                    </StackPanel>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
                         <DataGridTextColumn Header="Tóm Tắt Dữ Liệu" Binding="{Binding LatestTelemetrySummary}" Width="*"/>
                     </DataGrid.Columns>
                 </DataGrid>

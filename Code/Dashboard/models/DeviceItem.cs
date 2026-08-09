@@ -21,7 +21,7 @@ namespace UDM_21.Dashboard.Models
             set { _isOnline = value; OnPropertyChanged(); OnPropertyChanged(nameof(StatusText)); }
         }
 
-        public string StatusText => IsOnline ? "Online 🟢" : "Offline 🔴";
+        public string StatusText => IsOnline ? "Online" : "Offline";
 
         public string LastSeen
         {
