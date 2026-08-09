@@ -13,6 +13,9 @@ namespace UDM_21.Dashboard
     {
         private readonly MqttController _mqttController;
         private readonly ObservableCollection<DeviceItem> _devices = new ObservableCollection<DeviceItem>();
+        // Quản lý danh sách log cho ListBox
+        private readonly ObservableCollection<string> _logMessages = new ObservableCollection<string>();
+        private const int MaxLogLines = 200;
 
         public MainWindow()
         {
@@ -21,6 +24,7 @@ namespace UDM_21.Dashboard
 
             DgDevices.ItemsSource = _devices;
             CmbDevices.ItemsSource = _devices;
+            LbConsole.ItemsSource = _logMessages;
 
             _mqttController.ConnectionStatusChanged += OnConnectionStatusChanged;
             _mqttController.TelemetryReceived += OnTelemetryReceived;
@@ -142,8 +146,24 @@ namespace UDM_21.Dashboard
 
         private void LogConsole(string message)
         {
-            TxtConsole.AppendText($"[{DateTime.Now:HH:mm:ss}] {message}\n");
-            TxtConsole.ScrollToEnd();
+            Dispatcher.Invoke(() =>
+            {
+                string formattedMessage = $"[{DateTime.Now:HH:mm:ss}] {message}";
+                _logMessages.Add(formattedMessage);
+
+                // Giới hạn bộ nhớ tối đa 200 dòng log
+                if (_logMessages.Count > MaxLogLines)
+                {
+                    _logMessages.RemoveAt(0);
+                }
+
+                // Tự động cuộn đến phần tử mới nhất
+                if (LbConsole.Items.Count > 0)
+                {
+                    LbConsole.ScrollIntoView(LbConsole.Items[LbConsole.Items.Count - 1]);
+                }
+
+            });
         }
     }
 }
