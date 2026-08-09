@@ -2,7 +2,6 @@
 
 **Dự án:** Giám sát & Điều khiển Thiết bị IoT Qua Giao Thức MQTT (C# .NET 8 WPF)  
 **Ngày cập nhật:** 09/08/2026  
-**Người thực hiện:** Antigravity AI & Nhóm Phát Triển UDM_21  
 
 ---
 
