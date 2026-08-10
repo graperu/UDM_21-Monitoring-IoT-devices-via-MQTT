@@ -131,3 +131,4 @@ dotnet run --project Code/Simulators/Simulators.csproj
 # Terminal 2: Chạy ứng dụng Dashboard WPF
 dotnet run --project Code/Dashboard/Dashboard.csproj
 ```
+// HGiaHop test
