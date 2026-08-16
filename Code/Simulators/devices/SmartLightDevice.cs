@@ -58,9 +58,11 @@ namespace UDM_21.Simulators.Devices
                 var data = GenerateTelemetry();
                 var msg = new TelemetryMessage
                 {
+                    MessageId = Guid.NewGuid().ToString(),
                     DeviceId = DeviceId,
                     DeviceType = DeviceType,
                     Location = Location,
+                    Timestamp = DateTime.UtcNow.ToString("o"),
                     Data = data
                 };
                 await Mqtt.PublishAsync(TelemetryTopic, msg.ToJson(), MQTTnet.Protocol.MqttQualityOfServiceLevel.AtLeastOnce);
