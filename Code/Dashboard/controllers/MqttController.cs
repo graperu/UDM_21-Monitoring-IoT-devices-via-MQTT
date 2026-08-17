@@ -10,6 +10,11 @@ namespace UDM_21.Dashboard.Controllers
         // Cache phát hiện message trùng
         private static readonly HashSet<string> ProcessedMessages = new();
 
+        // Lưu thứ tự message để giới hạn 100 bản tin gần nhất
+        
+        private static readonly Queue<string> MessageQueue = new();
+
+        private const int MaxCacheSize = 100;
         // Lưu timestamp mới nhất của từng thiết bị
         private static readonly Dictionary<string, DateTime> LastTimestampByDevice = new();
 
@@ -103,13 +108,15 @@ namespace UDM_21.Dashboard.Controllers
                         return Task.CompletedTask;
                     }
 
+                    // Thêm message mới vào cache
                     ProcessedMessages.Add(msg.MessageId);
+                    MessageQueue.Enqueue(msg.MessageId);
 
-                    // giới hạn cache 100 bản tin
-
-                    if (ProcessedMessages.Count > 100)
+                    // Chỉ giữ lại 100 message gần nhất
+                    if (MessageQueue.Count > MaxCacheSize)
                     {
-                        ProcessedMessages.Clear();
+                        string oldestMessageId = MessageQueue.Dequeue();
+                        ProcessedMessages.Remove(oldestMessageId);
                     }
 
                     // =====================
