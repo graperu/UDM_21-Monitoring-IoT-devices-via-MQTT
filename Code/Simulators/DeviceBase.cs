@@ -35,29 +35,43 @@ namespace UDM_21.Simulators
             Mqtt.ConnectionChangedAsync += OnMqttConnectionChangedAsync;
         }
 
-        public async Task StartAsync(string brokerHost = "localhost", int brokerPort = 1883)
+        public async Task StartAsync(string brokerHost = "broker.emqx.io", int brokerPort = 1883)
         {
             _cts = new CancellationTokenSource();
 
-            var lwtStatus = new DeviceStatusMessage { DeviceId = DeviceId, Status = "offline" };
-            await Mqtt.ConnectAsync(brokerHost, brokerPort, StatusTopic, lwtStatus.ToJson());
+            var lwtStatus = new DeviceStatusMessage 
+            { 
+                MessageId = Guid.NewGuid().ToString(),
+                DeviceId = DeviceId, 
+                Status = "offline",
+                Timestamp = DateTime.UtcNow.ToString("o")
+            };
+            
+            try
+            {
+                await Mqtt.ConnectAsync(brokerHost, brokerPort, StatusTopic, lwtStatus.ToJson());
+                await Mqtt.SubscribeAsync(CmdTopic);
+                Console.WriteLine($"[Device {DeviceId}] Online and active.");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[Device {DeviceId}] Unreachable broker '{brokerHost}:{brokerPort}' ({ex.Message}). Auto-reconnect active...");
+            }
 
-            // Luu y: KHONG publish "online" o day nua - viec nay da duoc chuyen vao
-            // OnMqttConnectionChangedAsync() de tu dong chay lai moi khi (re)connect thanh cong.
-
-            // Subscribe topic lenh dieu khien - MqttHelper se tu dong subscribe lai
-            // sau moi lan reconnect, khong can lam gi them o day.
-            await Mqtt.SubscribeAsync(CmdTopic);
-
-            // Start telemetry publish loop
+            // Start telemetry publish loop regardless, auto-reconnect will re-establish session when broker is ready
             _ = Task.Run(() => TelemetryLoopAsync(_cts.Token));
-            Console.WriteLine($"[Device {DeviceId}] Online and active.");
         }
 
         public async Task StopAsync()
         {
             _cts?.Cancel();
-            var offlineStatus = new DeviceStatusMessage { DeviceId = DeviceId, Status = "offline" };
+            var offlineStatus = new DeviceStatusMessage 
+            { 
+                MessageId = Guid.NewGuid().ToString(),
+                DeviceId = DeviceId, 
+                Status = "offline",
+                Timestamp = DateTime.UtcNow.ToString("o")
+            };
             await Mqtt.PublishAsync(StatusTopic, offlineStatus.ToJson(), MQTTnet.Protocol.MqttQualityOfServiceLevel.AtLeastOnce, retain: true);
             await Mqtt.DisconnectAsync();
             Console.WriteLine($"[Device {DeviceId}] Offline and stopped.");
@@ -72,9 +86,11 @@ namespace UDM_21.Simulators
                     var data = GenerateTelemetry();
                     var msg = new TelemetryMessage
                     {
+                        MessageId = Guid.NewGuid().ToString(),
                         DeviceId = DeviceId,
                         DeviceType = DeviceType,
                         Location = Location,
+                        Timestamp = DateTime.UtcNow.ToString("o"),
                         Data = data
                     };
 
@@ -118,7 +134,13 @@ namespace UDM_21.Simulators
         {
             if (isConnected)
             {
-                var onlineStatus = new DeviceStatusMessage { DeviceId = DeviceId, Status = "online" };
+                var onlineStatus = new DeviceStatusMessage 
+                { 
+                    MessageId = Guid.NewGuid().ToString(),
+                    DeviceId = DeviceId, 
+                    Status = "online",
+                    Timestamp = DateTime.UtcNow.ToString("o")
+                };
                 await Mqtt.PublishAsync(StatusTopic, onlineStatus.ToJson(), MQTTnet.Protocol.MqttQualityOfServiceLevel.AtLeastOnce, retain: true);
                 Console.WriteLine($"[Device {DeviceId}] (Re)connected to Broker - published online status.");
             }

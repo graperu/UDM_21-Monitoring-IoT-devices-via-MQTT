@@ -14,6 +14,9 @@ namespace UDM_21.Shared
     /// </summary>
     public class TelemetryMessage
     {
+        [JsonProperty("message_id")]
+        public string MessageId { get; set; } = Guid.NewGuid().ToString();
+
         [JsonProperty("device_id")]
         public string DeviceId { get; set; } = string.Empty;
 
@@ -24,18 +27,16 @@ namespace UDM_21.Shared
         public string Location { get; set; } = string.Empty;
 
         [JsonProperty("timestamp")]
-        public string Timestamp { get; set; } = DateTime.Now.ToString("o");
+        public string Timestamp { get; set; } = DateTime.UtcNow.ToString("o");
 
         [JsonProperty("data")]
         public Dictionary<string, object> Data { get; set; } = new Dictionary<string, object>();
 
-        // TODO: Viết hàm chuyển đối tượng sang chuỗi JSON
         public string ToJson()
         {
             return JsonConvert.SerializeObject(this);
         }
 
-        // TODO: Viết hàm chuyển từ chuỗi JSON sang đối tượng
         public static TelemetryMessage? FromJson(string json)
         {
             return JsonConvert.DeserializeObject<TelemetryMessage>(json);
@@ -48,6 +49,9 @@ namespace UDM_21.Shared
     /// </summary>
     public class DeviceStatusMessage
     {
+        [JsonProperty("message_id")]
+        public string MessageId { get; set; } = Guid.NewGuid().ToString();
+
         [JsonProperty("device_id")]
         public string DeviceId { get; set; } = string.Empty;
 
@@ -55,7 +59,7 @@ namespace UDM_21.Shared
         public string Status { get; set; } = "offline"; // "online" hoặc "offline"
 
         [JsonProperty("timestamp")]
-        public string Timestamp { get; set; } = DateTime.Now.ToString("o");
+        public string Timestamp { get; set; } = DateTime.UtcNow.ToString("o");
 
         public string ToJson() => JsonConvert.SerializeObject(this);
         public static DeviceStatusMessage? FromJson(string json) => JsonConvert.DeserializeObject<DeviceStatusMessage>(json);
@@ -72,6 +76,9 @@ namespace UDM_21.Shared
 
         [JsonProperty("command")]
         public string Command { get; set; } = string.Empty;
+
+        [JsonProperty("timestamp")]
+        public string Timestamp { get; set; } = DateTime.UtcNow.ToString("o");
 
         [JsonProperty("params")]
         public Dictionary<string, object> Params { get; set; } = new Dictionary<string, object>();
