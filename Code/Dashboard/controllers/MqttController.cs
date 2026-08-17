@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using UDM_21.Shared;
 
@@ -6,6 +7,12 @@ namespace UDM_21.Dashboard.Controllers
 {
     public class MqttController
     {
+        // Cache phát hiện message trùng
+        private static readonly HashSet<string> ProcessedMessages = new();
+
+        // Lưu timestamp mới nhất của từng thiết bị
+        private static readonly Dictionary<string, DateTime> LastTimestampByDevice = new();
+
         private readonly MqttHelper _mqtt;
 
         public event Action<bool, string>? ConnectionStatusChanged;
@@ -72,24 +79,77 @@ namespace UDM_21.Dashboard.Controllers
             return Task.CompletedTask;
         }
 
-        private Task OnMessageReceivedAsync(string topic, string payload, MQTTnet.Protocol.MqttQualityOfServiceLevel qos, bool retain)
+        private Task OnMessageReceivedAsync(
+            string topic,
+            string payload,
+            MQTTnet.Protocol.MqttQualityOfServiceLevel qos,
+            bool retain)
         {
             if (topic.EndsWith("/telemetry"))
             {
                 var msg = TelemetryMessage.FromJson(payload);
+
                 if (msg != null)
                 {
+                    // =====================
+                    // DEDUPLICATION
+                    // =====================
+
+                    if (ProcessedMessages.Contains(msg.MessageId))
+                    {
+                        Console.WriteLine(
+                            $"[MQTT] Duplicate message ignored: {msg.MessageId}");
+
+                        return Task.CompletedTask;
+                    }
+
+                    ProcessedMessages.Add(msg.MessageId);
+
+                    // giới hạn cache 100 bản tin
+
+                    if (ProcessedMessages.Count > 100)
+                    {
+                        ProcessedMessages.Clear();
+                    }
+
+                    // =====================
+                    // OUT OF ORDER
+                    // =====================
+
+                    if (DateTime.TryParse(
+                        msg.Timestamp,
+                        out DateTime currentTimestamp))
+                    {
+                        if (LastTimestampByDevice.TryGetValue(
+                            msg.DeviceId,
+                            out DateTime lastTimestamp))
+                        {
+                            if (currentTimestamp < lastTimestamp)
+                            {
+                                Console.WriteLine(
+                                    $"[MQTT] Out-of-order message ignored. Device={msg.DeviceId}");
+
+                                return Task.CompletedTask;
+                            }
+                        }
+
+                        LastTimestampByDevice[msg.DeviceId]
+                            = currentTimestamp;
+                    }
+
                     TelemetryReceived?.Invoke(msg);
                 }
             }
             else if (topic.EndsWith("/status"))
             {
                 var statusMsg = DeviceStatusMessage.FromJson(payload);
+
                 if (statusMsg != null)
                 {
                     DeviceStatusReceived?.Invoke(statusMsg);
                 }
             }
+
             return Task.CompletedTask;
         }
     }
