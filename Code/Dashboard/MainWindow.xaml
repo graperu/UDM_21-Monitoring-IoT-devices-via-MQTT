@@ -36,7 +36,7 @@
 
             <!-- Left: Device DataGrid -->
             <GroupBox Header="Danh Sách Thiết Bị &amp; Dữ Liệu Real-Time" Grid.Column="0" Margin="0,0,5,0">
-                <DataGrid x:Name="DgDevices" AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False">
+                <DataGrid x:Name="DgDevices" AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" MouseDoubleClick="DgDevices_MouseDoubleClick">
                     <DataGrid.Columns>
                         <DataGridTextColumn Header="Device ID" Binding="{Binding DeviceId}" Width="120"/>
                         <DataGridTextColumn Header="Loại" Binding="{Binding DeviceType}" Width="80"/>

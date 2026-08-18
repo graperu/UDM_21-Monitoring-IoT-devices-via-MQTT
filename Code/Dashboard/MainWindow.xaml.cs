@@ -1,10 +1,11 @@
+using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Windows;
+using System.Windows.Input;
 using System.Windows.Media;
-using Newtonsoft.Json;
 using UDM_21.Dashboard.Controllers;
 using UDM_21.Dashboard.Models;
 using UDM_21.Dashboard.Services;
@@ -264,6 +265,19 @@ namespace UDM_21.Dashboard
                             LbConsole.Items.Count - 1]);
                 }
             });
+        }
+
+        private void DgDevices_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+        {
+            if (DgDevices.SelectedItem is DeviceItem device)
+            {
+                var historyWindow =
+                    new TelemetryHistoryWindow(
+                        device.DeviceId,
+                        _historyManager);
+
+                historyWindow.Show();
+            }
         }
     }
 }

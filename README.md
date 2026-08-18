@@ -7,15 +7,15 @@
 
 ---
 
-## 👥 1. Danh sách Thành viên Nhóm & Phân công Công việc (5 Thành Viên)
+# 👥 1. Danh sách Thành viên Nhóm & Phân công Công việc
 
-| STT | Họ và tên | Mã Sinh Viên | Vai Trò / Nhiệm Vụ Phân Công | Thư Mục / File Đảm Nhận | GitHub Account |
-|---|---|---|---|---|---|
-| 1 | [Họ tên SV 1] | [MSSV 1] | **Trưởng nhóm:** Thiết kế & Lập trình Giao diện Dashboard GUI (WPF XAML, DataBinding, Layout) | `Code/Dashboard/MainWindow.xaml`<br>`Code/Dashboard/App.xaml` | `@account1` |
-| 2 | [Họ tên SV 2] | [MSSV 2] | **Lập trình Logic Dashboard:** Event Handler, Controller & Dispatcher không làm treo GUI | `Code/Dashboard/Controllers/`<br>`Code/Dashboard/Models/`<br>`Code/Dashboard/MainWindow.xaml.cs` | `@account2` |
-| 3 | [Họ tên SV 3] | [MSSV 3] | **Lập trình Thiết bị Giả lập:** Multi-threading 5 IoT Devices, Vòng lặp Telemetry, LWT Status | `Code/Simulators/DeviceBase.cs`<br>`Code/Simulators/Devices/`<br>`Code/Simulators/Program.cs` | `@account3` |
-| 4 | [Họ tên SV 4] | [MSSV 4] | **Lập trình Giao thức Mạng Cốt lõi:** Wrapper MQTTnet, Pub/Sub, QoS 0/1, Reconnect, JSON Protocol | `Code/Shared/MqttHelper.cs`<br>`Code/Shared/Protocol.cs`<br>`Code/Shared/Shared.csproj` | `@account4` |
-| 5 | [Họ tên SV 5] | [MSSV 5] | **Kiểm thử & Báo cáo:** Stress Test, Performance Test, Đo độ trễ, Viết Báo cáo (.docx) & Slide (.pptx) | `Extra/scripts/stress_test.py`<br>`DOCX/`<br>`PPTX/` | `@account5` |
+| STT | Họ và tên | MSSV | Vai trò / Nhiệm vụ | Thư mục / File đảm nhận |
+|-----|-----------|-----------|------------------|-------------------------|
+| 1 | Vũ Ngọc Cát Chương | 056206003708 | Thiết kế và lập trình giao diện Dashboard GUI (WPF), xây dựng MainWindow.xaml, App.xaml, DataGrid hiển thị danh sách thiết bị, form gửi lệnh điều khiển và khung Console Log. | `Code/Dashboard/MainWindow.xaml`<br>`Code/Dashboard/App.xaml` |
+| 2 | Huỳnh Nữ Huyền Trâm | 051305001244 | Lập trình Logic Dashboard, Event Handler, Controller và Dispatcher. Xử lý Subscribe MQTT, cập nhật dữ liệu thời gian thực lên giao diện, xây dựng Model và Data Binding. | `Code/Dashboard/Controllers/`<br>`Code/Dashboard/Models/`<br>`Code/Dashboard/MainWindow.xaml.cs` |
+| 3 | Phan Văn Đình | 0542050036039 | Trưởng nhóm. Lập trình hệ thống thiết bị IoT giả lập. Xây dựng DeviceBase, mô phỏng nhiều thiết bị IoT, vòng lặp Telemetry, Last Will & Testament (LWT) và xử lý Command. | `Code/Simulators/DeviceBase.cs`<br>`Code/Simulators/Devices/`<br>`Code/Simulators/Program.cs` |
+| 4 | Huỳnh Gia Hợp | 054205008367 | Lập trình giao thức mạng cốt lõi. Xây dựng MQTT Wrapper bằng MQTTnet, xử lý Publish/Subscribe, QoS 0/1, Auto Reconnect, MQTT Logging, JSON Protocol và Command ACK. | `Code/Shared/MqttHelper.cs`<br>`Code/Shared/Protocol.cs`<br>`Code/Shared/Shared.csproj` |
+| 5 | Lưu Đình Thuận | 075205010434 | Kiểm thử và báo cáo. Thực hiện Stress Test, đo độ trễ và hiệu năng hệ thống, tổng hợp kết quả kiểm thử, viết báo cáo và slide thuyết trình. | `Extra/scripts/stress_test.py`<br>`DOCX/`<br>`PPTX/` |
 
 ---
 
@@ -131,3 +131,103 @@ dotnet run --project Code/Simulators/Simulators.csproj
 # Terminal 2: Chạy ứng dụng Dashboard WPF
 dotnet run --project Code/Dashboard/Dashboard.csproj
 ```
+---
+
+## ✅ 7. Kết quả đạt được
+
+Dự án đã xây dựng thành công hệ thống giám sát và điều khiển thiết bị IoT thông qua giao thức MQTT bằng ngôn ngữ C# .NET 8.
+
+
+### Các chức năng đã hoàn thành
+
+✅ Xây dựng Dashboard Desktop bằng WPF hiển thị dữ liệu thiết bị theo thời gian thực.
+
+✅ Mô phỏng đồng thời 5 thiết bị IoT:
+- Temperature & Humidity Sensor
+- Air Quality Sensor
+- Power Meter
+- Smart Light
+- Door Sensor
+
+✅ Thiết bị gửi dữ liệu Telemetry định kỳ tới MQTT Broker theo mô hình Publish/Subscribe.
+
+✅ Dashboard Subscribe dữ liệu từ nhiều Topic MQTT và cập nhật giao diện theo thời gian thực.
+
+✅ Hiển thị trạng thái Online/Offline của thiết bị thông qua Last Will and Testament (LWT).
+
+✅ Hỗ trợ gửi lệnh điều khiển từ Dashboard tới thiết bị.
+
+✅ Triển khai cơ chế Command ACK giúp xác nhận lệnh điều khiển đã được thiết bị tiếp nhận.
+
+✅ Hỗ trợ MQTT Logging để theo dõi toàn bộ hoạt động Publish, Subscribe và Command.
+
+✅ Tự động kết nối lại (Auto Reconnect) khi Broker hoặc Client bị mất kết nối.
+
+✅ Quản lý lịch sử Telemetry thông qua TelemetryHistoryManager.
+
+✅ Hỗ trợ cảnh báo dữ liệu bất thường (Anomaly Alert) phục vụ giám sát hệ thống.
+
+✅ Sử dụng Unique Client ID cho từng thiết bị nhằm tránh xung đột kết nối MQTT.
+
+✅ Thực hiện Stress Test nhằm đánh giá độ ổn định và khả năng xử lý nhiều thông điệp MQTT liên tục.
+
+✅ Hoàn thiện báo cáo và slide thuyết trình .
+
+
+
+### Kết quả kiểm thử
+
+- Dashboard nhận dữ liệu Telemetry ổn định từ nhiều thiết bị đồng thời.
+- Thiết bị tự động cập nhật trạng thái Online/Offline khi kết nối thay đổi.
+- Lệnh điều khiển được gửi và xác nhận thành công thông qua ACK Protocol.
+- Hệ thống duy trì hoạt động ổn định khi thực hiện Stress Test với số lượng lớn thông điệp MQTT.
+- Chức năng Auto Reconnect hoạt động đúng khi Broker bị ngắt kết nối tạm thời.
+
+### Công nghệ sử dụng
+
+- C# .NET 8
+- WPF
+- MQTTnet
+- MQTT Broker (Mosquitto / EMQX)
+- JSON Serialization
+- Git & GitHub
+
+---
+
+## 📊 8. Đánh giá kết quả
+
+Hệ thống hoạt động ổn định với nhiều thiết bị gửi dữ liệu đồng thời.
+
+Dashboard có khả năng cập nhật dữ liệu theo thời gian thực và hiển thị trạng thái thiết bị chính xác.
+
+Chức năng Auto Reconnect giúp hệ thống duy trì hoạt động khi Broker bị ngắt kết nối tạm thời.
+
+Command ACK giúp xác nhận việc thực thi lệnh điều khiển từ Dashboard tới thiết bị.
+
+MQTT Logging hỗ trợ theo dõi và xử lý lỗi trong quá trình vận hành hệ thống.
+
+Dự án đáp ứng đầy đủ các yêu cầu của đề tài môn Lập Trình Mạng.
+
+---
+
+## 🤝 9. Đánh giá đóng góp thành viên
+
+| Thành viên | Vai trò | Mức độ hoàn thành |
+|------------|----------|------------------|
+| Vũ Ngọc Cát Chương | Giao diện Dashboard WPF | Hoàn thành tốt |
+| Huỳnh Nữ Huyền Trâm | Logic Dashboard | Hoàn thành tốt |
+| Phan Văn Đình | Thiết bị IoT giả lập | Hoàn thành tốt |
+| Huỳnh Gia Hợp | MQTT Protocol, Logging, Auto Reconnect, ACK Protocol | Hoàn thành tốt |
+| Lưu Đình Thuận | Kiểm thử, Báo cáo, Slide | Hoàn thành tốt |
+
+Tất cả thành viên đều hoàn thành nhiệm vụ được phân công đúng tiến độ, phối hợp hiệu quả trong quá trình phát triển dự án và không phát sinh mâu thuẫn trong quá trình làm việc nhóm.
+
+---
+
+## 🎯 Kết luận
+
+Dự án đã áp dụng thành công giao thức MQTT để xây dựng hệ thống giám sát và điều khiển thiết bị IoT theo mô hình Publish/Subscribe.
+
+Thông qua dự án, nhóm đã hiểu rõ hơn về lập trình mạng, giao thức MQTT, cơ chế QoS, Last Will & Testament (LWT), Auto Reconnect, Command ACK và việc xây dựng hệ thống IoT theo thời gian thực.
+
+Hệ thống có thể tiếp tục mở rộng trong tương lai bằng cách tích hợp cơ sở dữ liệu, nền tảng Cloud hoặc các thiết bị IoT thực tế.

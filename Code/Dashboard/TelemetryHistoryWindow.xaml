@@ -1,0 +1,61 @@
+﻿<Window x:Class="UDM_21.Dashboard.TelemetryHistoryWindow"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+      xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+      mc:Ignorable="d" 
+      d:DesignHeight="450" d:DesignWidth="800"
+      Title="Telemetry History">
+
+    <Grid Margin="10">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="4*"/>
+            <ColumnDefinition Width="11*"/>
+        </Grid.ColumnDefinitions>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+        <GroupBox Header="Telemetry History" Grid.Row="0" Margin="0,0,0,10" Padding="8" Grid.ColumnSpan="2">
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
+                <Button Content="Delete History"  Margin="0,0,10,0" Background="Red" Foreground="White" FontWeight="Bold" Click="HistoryDelete_Click">
+                </Button>
+            </StackPanel>
+        </GroupBox>
+        <Grid Grid.Row="1" Grid.ColumnSpan="2">
+            <ListView x:Name="HistoryListView">
+
+                <ListView.ItemTemplate>
+                    <DataTemplate>
+
+                        <Border Margin="0,5"
+                                Padding="10"
+                                BorderThickness="1">
+
+                            <StackPanel>
+                                <TextBlock
+                                    Text="{Binding DeviceId}"
+                                    FontWeight="Bold"/>
+
+                                <TextBlock
+                                    Text="{Binding Location}"/>
+
+                                <TextBlock
+                                    Text="{Binding DeviceType}"/>
+
+                                <TextBlock
+                                    Text="{Binding StatusText}"/>
+
+                                <TextBlock
+                                    Text="{Binding LatestTelemetrySummary}"/>
+                            </StackPanel>
+
+                        </Border>
+
+                    </DataTemplate>
+                </ListView.ItemTemplate>
+
+            </ListView>
+        </Grid>
+    </Grid>
+</Window>
