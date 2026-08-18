@@ -13,8 +13,14 @@ namespace UDM_21.Simulators
             Console.WriteLine(" UDM_21: IoT Devices Simulator (.NET 8)");
             Console.WriteLine("==============================================");
 
-            string host = args.Length > 0 ? args[0] : "localhost";
+            string host = args.Length > 0 ? args[0] : "broker.emqx.io";
             int port = args.Length > 1 && int.TryParse(args[1], out int p) ? p : 1883;
+
+            if (args.Length == 0)
+            {
+                Console.WriteLine("[INFO] Khong co tham so Broker host. Mac dinh su dung Public Broker: broker.emqx.io:1883");
+                Console.WriteLine("       (De dung local broker, chay: dotnet run --project Code/Simulators/Simulators.csproj localhost 1883)\n");
+            }
 
             var devices = new List<DeviceBase>
             {
