@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using UDM_21.Shared;
 
@@ -6,6 +7,17 @@ namespace UDM_21.Dashboard.Controllers
 {
     public class MqttController
     {
+        // Cache phát hiện message trùng
+        private static readonly HashSet<string> ProcessedMessages = new();
+
+        // Lưu thứ tự message để giới hạn 100 bản tin gần nhất
+        
+        private static readonly Queue<string> MessageQueue = new();
+
+        private const int MaxCacheSize = 100;
+        // Lưu timestamp mới nhất của từng thiết bị
+        private static readonly Dictionary<string, DateTime> LastTimestampByDevice = new();
+
         private readonly MqttHelper _mqtt;
 
         public event Action<bool, string>? ConnectionStatusChanged;
@@ -72,24 +84,79 @@ namespace UDM_21.Dashboard.Controllers
             return Task.CompletedTask;
         }
 
-        private Task OnMessageReceivedAsync(string topic, string payload, MQTTnet.Protocol.MqttQualityOfServiceLevel qos, bool retain)
+        private Task OnMessageReceivedAsync(
+            string topic,
+            string payload,
+            MQTTnet.Protocol.MqttQualityOfServiceLevel qos,
+            bool retain)
         {
             if (topic.EndsWith("/telemetry"))
             {
                 var msg = TelemetryMessage.FromJson(payload);
+
                 if (msg != null)
                 {
+                    // =====================
+                    // DEDUPLICATION
+                    // =====================
+
+                    if (ProcessedMessages.Contains(msg.MessageId))
+                    {
+                        Console.WriteLine(
+                            $"[MQTT] Duplicate message ignored: {msg.MessageId}");
+
+                        return Task.CompletedTask;
+                    }
+
+                    // Thêm message mới vào cache
+                    ProcessedMessages.Add(msg.MessageId);
+                    MessageQueue.Enqueue(msg.MessageId);
+
+                    // Chỉ giữ lại 100 message gần nhất
+                    if (MessageQueue.Count > MaxCacheSize)
+                    {
+                        string oldestMessageId = MessageQueue.Dequeue();
+                        ProcessedMessages.Remove(oldestMessageId);
+                    }
+
+                    // =====================
+                    // OUT OF ORDER
+                    // =====================
+
+                    if (DateTime.TryParse(
+                        msg.Timestamp,
+                        out DateTime currentTimestamp))
+                    {
+                        if (LastTimestampByDevice.TryGetValue(
+                            msg.DeviceId,
+                            out DateTime lastTimestamp))
+                        {
+                            if (currentTimestamp < lastTimestamp)
+                            {
+                                Console.WriteLine(
+                                    $"[MQTT] Out-of-order message ignored. Device={msg.DeviceId}");
+
+                                return Task.CompletedTask;
+                            }
+                        }
+
+                        LastTimestampByDevice[msg.DeviceId]
+                            = currentTimestamp;
+                    }
+
                     TelemetryReceived?.Invoke(msg);
                 }
             }
             else if (topic.EndsWith("/status"))
             {
                 var statusMsg = DeviceStatusMessage.FromJson(payload);
+
                 if (statusMsg != null)
                 {
                     DeviceStatusReceived?.Invoke(statusMsg);
                 }
             }
+
             return Task.CompletedTask;
         }
     }
