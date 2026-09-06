@@ -32,6 +32,12 @@ namespace UDM_21.Shared
         [JsonProperty("data")]
         public Dictionary<string, object> Data { get; set; } = new Dictionary<string, object>();
 
+        /// <summary>
+        /// Thuộc tính dùng riêng cho WPF DataGrid Binding hiển thị chuỗi JSON của Data
+        /// </summary>
+        [JsonIgnore]
+        public string DataJson => Data != null ? JsonConvert.SerializeObject(Data, Formatting.None) : "{}";
+
         public string ToJson()
         {
             return JsonConvert.SerializeObject(this);
