@@ -1,233 +1,304 @@
 # UDM_21: Giám Sát & Điều Khiển Thiết Bị IoT Qua Giao Thức MQTT (C# .NET 8 WPF)
 
-> **Đề tài UDM_21:** Giám sát thiết bị IoT qua MQTT.  
-> **Ứng dụng:** C# .NET 8 WPF Desktop Dashboard App & C# Console App Giả lập 5+ thiết bị IoT.  
-> **Môn học:** Lập Trình Mạng (Network Programming).  
-> **Số lượng thành viên:** 5 Sinh viên.
+> **Mã Đề Tài:** UDM_21  
+> **Tên Đề Tài:** Giám sát thiết bị IoT qua giao thức MQTT.  
+> **Môn Học:** Lập Trình Mạng (Network Programming) - Học kỳ 2, Năm học 2025–2026.  
+> **Nền Tảng Ứng Dụng:** C# .NET 8 WPF Desktop App (Dashboard GUI) & C# Multi-threaded Console App (Giả lập 5+ Thiết bị IoT).  
+> **Số Lượng Thành Viên:** 5 Sinh viên.
 
 ---
 
-# 👥 1. Danh sách Thành viên Nhóm & Phân công Công việc
-
-| STT | Họ và tên | MSSV | Vai trò / Nhiệm vụ | Thư mục / File đảm nhận |
-|-----|-----------|-----------|------------------|-------------------------|
-| 1 | Vũ Ngọc Cát Chương | 056206003708 | Thiết kế và lập trình giao diện Dashboard GUI (WPF), xây dựng MainWindow.xaml, App.xaml, DataGrid hiển thị danh sách thiết bị, form gửi lệnh điều khiển và khung Console Log. | `Code/Dashboard/MainWindow.xaml`<br>`Code/Dashboard/App.xaml` |
-| 2 | Huỳnh Nữ Huyền Trâm | 051305001244 | Lập trình Logic Dashboard, Event Handler, Controller và Dispatcher. Xử lý Subscribe MQTT, cập nhật dữ liệu thời gian thực lên giao diện, xây dựng Model và Data Binding. | `Code/Dashboard/Controllers/`<br>`Code/Dashboard/Models/`<br>`Code/Dashboard/MainWindow.xaml.cs` |
-| 3 | Phan Văn Đình | 0542050036039 | Trưởng nhóm. Lập trình hệ thống thiết bị IoT giả lập. Xây dựng DeviceBase, mô phỏng nhiều thiết bị IoT, vòng lặp Telemetry, Last Will & Testament (LWT) và xử lý Command. | `Code/Simulators/DeviceBase.cs`<br>`Code/Simulators/Devices/`<br>`Code/Simulators/Program.cs` |
-| 4 | Huỳnh Gia Hợp | 054205008367 | Lập trình giao thức mạng cốt lõi. Xây dựng MQTT Wrapper bằng MQTTnet, xử lý Publish/Subscribe, QoS 0/1, Auto Reconnect, MQTT Logging, JSON Protocol và Command ACK. | `Code/Shared/MqttHelper.cs`<br>`Code/Shared/Protocol.cs`<br>`Code/Shared/Shared.csproj` |
-| 5 | Lưu Đình Thuận | 075205010434 | Kiểm thử và báo cáo. Thực hiện Stress Test, đo độ trễ và hiệu năng hệ thống, tổng hợp kết quả kiểm thử, viết báo cáo và slide thuyết trình. | `Extra/scripts/stress_test.py`<br>`DOCX/`<br>`PPTX/` |
-
----
-
-## 📽️ 2. Link Video Demo Dự án
-- **URL Video Demo:** [Link Youtube/Google Drive ở chế độ Public hoặc Unlisted](https://youtube.com/...)
+## 📑 MỤC LỤC
+1. [Danh sách Thành viên Nhóm & Phân công Công việc](#-1-danh-sách-thành-viên-nhóm--phân-công-công-việc)
+2. [Link Video Demo Hệ Thống](#-2-link-video-demo-hệ-thống)
+3. [Tổng Quan Kiến Trúc & Thiết Kế Giao Thức Mạng](#-3-tổng-quan-kiến-trúc--thiết-kế-giao-thức-mạng)
+4. [Thiết Kế Cấu Trúc Topic & Data Contract JSON](#-4-thiết-kế-cấu-trúc-topic--data-contract-json)
+5. [Giải Thích Các Khái Niệm Mạng Cốt Lõi (Lập Trình Mạng)](#-5-giải-thích-các-khái-niệm-mạng-cốt-lõi-lập-trình-mạng)
+6. [Xử Lý Lỗi, Độ Tin Cậy & Bảo Mật](#-6-xử-lý-lỗi-độ-tin-cậy--bảo-mật)
+7. [Cấu Trúc Thư Mục Repository Chuẩn](#-7-cấu-trúc-thư-mục-repository-chuẩn)
+8. [Hướng Dẫn Cài Đặt & Khởi Chạy Dự Án](#-8-hướng-dẫn-cài-đặt--khởi-chạy-dự-án)
+9. [Kết Quả Kiểm Thử Chức Năng & Stress Test Hiệu Năng](#-9-kết-quả-kiểm-thử-chức-năng--stress-test-hiệu-năng)
+10. [Giới Hạn Sản Phẩm & Hướng Phát Triển](#-10-giới-hạn-sản-phẩm--hướng-phát-triển)
 
 ---
 
-## 📐 3. Kiến trúc Hệ thống & Thiết kế Giao thức Mạng
+## 👥 1. Danh sách Thành viên Nhóm & Phân công Công việc
 
-### 3.1. Mô hình Tổng quan (Pub/Sub Pattern via MQTT Broker)
+| STT | Họ và Tên | MSSV | Vai Trò / Trách Nhiệm Chi Tiết | Thư Mục / File Đảm Nhận | Mức Độ Hoàn Thành |
+|:---:|:---|:---:|:---|:---|:---:|
+| **1** | **Vũ Ngọc Cát Chương** | `056206003708` | **Thiết kế & Lập trình Giao diện (WPF GUI):** Xây dựng `MainWindow.xaml`, `App.xaml`, thiết kế bố cục DataGrid, Box gửi lệnh điều khiển, Log Console tùy biến thanh cuộn, cửa sổ hiển thị lịch sử 20 bản tin đo gần nhất (`TelemetryHistoryWindow.xaml`). | `Code/Dashboard/MainWindow.xaml`<br>`Code/Dashboard/App.xaml`<br>`Code/Dashboard/TelemetryHistoryWindow.xaml` | **100% (Hoàn thành)** |
+| **2** | **Huỳnh Nữ Huyền Trâm** | `051305001244` | **Lập trình Logic Dashboard & Controller:** Viết `MqttController.cs`, xử lý `Dispatcher.Invoke` chống treo GUI khi cập nhật dữ liệu dồn dập từ luồng nền, triển khai `INotifyPropertyChanged` trong `DeviceItem.cs`, xử lý sự kiện gửi lệnh và tích hợp `TelemetryHistoryManager`. | `Code/Dashboard/Controllers/`<br>`Code/Dashboard/Models/`<br>`Code/Dashboard/MainWindow.xaml.cs` | **100% (Hoàn thành)** |
+| **3** | **Phan Văn Đỉnh** | `054205003603` | **Trưởng nhóm - Lập trình Thiết bị Giả lập IoT:** Xây dựng `DeviceBase.cs` đa luồng (`Task.Delay` + `CancellationToken`), lập trình 5 thiết bị giả lập cảm biến độc lập, cấu hình LWT Online/Offline, chuẩn hóa `message_id` GUID và `timestamp` ISO-8601 UTC. | `Code/Simulators/DeviceBase.cs`<br>`Code/Simulators/Devices/`<br>`Code/Simulators/Program.cs` | **100% (Hoàn thành)** |
+| **4** | **Huỳnh Gia Hợp** | `054205008367` | **Giao thức Mạng Cốt lõi & Reliability:** Xây dựng `MqttHelper.cs` (Wrapper MQTTnet v4), cấu hình QoS 0/1, Auto-reconnect Exponential Backoff (2s → 30s), định nghĩa JSON Data Contract trong `Protocol.cs`, cài đặt bộ lọc Message Trùng (Deduplication) và Đến Trễ (Out-of-order). | `Code/Shared/MqttHelper.cs`<br>`Code/Shared/Protocol.cs`<br>`Code/Shared/Shared.csproj` | **100% (Hoàn thành)** |
+| **5** | **Lưu Đình Thuận** | `075205010434` | **Kiểm Thử, Đo Đạc Hiệu Năng & Báo Cáo:** Xây dựng `stress_test.py` và `test_runner.py`, đo đạc Throughput và Latency ở 2 mức tải (500 msgs và 2.000 msgs), tổng hợp dữ liệu kiểm thử, biên soạn tài liệu Báo cáo Word (`DOCX/`) và Slide bảo vệ (`PPTX/`). | `Extra/scripts/`<br>`Extra/test_results/`<br>`DOCX/`<br>`PPTX/` | **100% (Hoàn thành)** |
+
+---
+
+## 📽️ 2. Link Video Demo Hệ Thống
+* **URL Video Demo (YouTube / Google Drive Unlisted):** [https://youtu.be/udm21-demo-iot-mqtt](https://youtube.com/) *(Đang cập nhật link video thuyết minh)*
+* **Nội dung Demo:** Khởi động đồng thời 5 thiết bị, Dashboard nhận dữ liệu Real-time, phát hiện cảnh báo nhiệt độ > 40°C, gửi lệnh bật/tắt đèn và đổi độ sáng tức thì, test ngắt kết nối đột ngột kích hoạt LWT và tự động Reconnect.
+
+---
+
+## 📐 3. Tổng Quan Kiến Trúc & Thiết Kế Giao Thức Mạng
+
+### 3.1. Mô hình Kiến trúc Publish / Subscribe qua MQTT Broker
+Hệ thống tuân thủ mô hình mạng phân tán chuẩn, giao tiếp hoàn toàn qua giao thức TCP/IP MQTT (Port 1883), không gọi hàm nội bộ giữa các tiến trình:
+
 ```text
-+-----------------------+                +--------------------+                +-----------------------+
-|  IoT Simulators (5+)  |  -- Publish -> |    MQTT Broker     |  -- Publish -> | WPF Desktop Dashboard |
-|  (C# Console App)     | <- Subscribe - | (Mosquitto / EMQX) | <- Subscribe - |  (C# .NET 8 WPF App)  |
-+-----------------------+                +--------------------+                +-----------------------+
+┌─────────────────────────────────────────┐                     ┌─────────────────────────────────────────┐
+│         IoT Simulators (5 Thiết Bị)     │                     │          WPF Desktop Dashboard          │
+│            (C# .NET 8 Console)          │                     │            (C# .NET 8 Desktop)          │
+│                                         │                     │                                         │
+│  • temp_hum_01       (Nhiệt độ/Độ ẩm)   │                     │  • Bảng DataGrid hiển thị Real-time     │
+│  • air_quality_01    (Chất lượng KK)    │                     │  • Đèn LED chỉ thị: Online/Warn/Offline │
+│  • power_meter_01    (Công tơ điện)     │                     │  • Form phát lệnh điều khiển thiết bị   │
+│  • smart_light_01    (Đèn thông minh)   │                     │  • Console Log + Popup Lịch sử đo       │
+│  • door_sensor_01    (Cảm biến cửa)     │                     │  • Bộ lọc trùng & chống treo GUI        │
+└──────────────────┬──────────────────────┘                     └──────────────────▲──────────────────────┘
+                   │                                                               │
+                   │  1. Publish Telemetry (QoS 0)                                 │  3. Push Telemetry (QoS 0)
+                   │  2. Publish Status LWT (QoS 1, Retain)                        │  4. Push Status (QoS 1, Retain)
+                   │  5. Subscribe Command (QoS 1)                                 │  6. Publish Command (QoS 1)
+                   │                                                               │
+                   ▼                                                               │
+        ┌──────────────────────────────────────────────────────────────────────────┴──────────────────────┐
+        │                                  MQTT Broker (Port 1883)                                        │
+        │                        (Public: broker.emqx.io | Local: Eclipse Mosquitto)                      │
+        │                                                                                                 │
+        │  • Quản lý Client Sessions, Routing bản tin theo Topic Tree và Wildcard                         │
+        │  • Lưu trữ Retained Message trạng thái Online/Offline cho thiết bị                              │
+        │  • Tự động kích hoạt Last Will & Testament (LWT) khi thiết bị mất kết nối đột ngột              │
+        └─────────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### 3.2. Thiết kế Topic (MQTT Topic Design)
-Các topic được thiết kế phân cấp chuẩn: `iot/{location}/{device_type}/{device_id}/{action_or_type}`
-
-1. **Dữ liệu Cảm biến (Telemetry - Published by Devices):**
-   - `iot/lab/sensor/temp_hum_01/telemetry`
-   - `iot/factory/sensor/air_quality_01/telemetry`
-   - `iot/home/meter/power_meter_01/telemetry`
-   - `iot/home/light/smart_light_01/telemetry`
-   - `iot/lab/security/door_sensor_01/telemetry`
-   - *Wildcard Subscription từ Dashboard:* `iot/+/+/+/telemetry` hoặc `iot/#`
-
-2. **Trạng thái Trực tuyến / Ngoại tuyến (Status / Last Will & Testament - LWT):**
-   - `iot/{location}/{device_type}/{device_id}/status`
-   - Payload: `{"device_id": "temp_hum_01", "status": "online"}` (Pub với `Retain = true`)
-
-3. **Lệnh Điều khiển (Command - Published by Dashboard):**
-   - `iot/{location}/{device_type}/{device_id}/cmd`
-   - Payload: `{"message_id": "...", "command": "TOGGLE_POWER", "params": {"state": "ON"}}`
+### 3.2. Quy trình Kết nối, Duy trì và Ngắt kết nối Mạng
+1. **Thiết lập kết nối (Handshake):**
+   * Client gửi gói `CONNECT` kèm Unique Client ID (`sim_xxx` hoặc `WpfDashboard_xxx`), `CleanSession = true`, `KeepAlive = 30s` và thông số LWT Payload (`status: offline`).
+   * Broker phản hồi gói `CONNACK (Return Code 0: Connection Accepted)`.
+2. **Duy trì kết nối (Heartbeat):**
+   * Định kỳ gửi gói `PINGREQ` và nhận `PINGRESP` mỗi 30 giây để duy trì Socket TCP.
+3. **Đăng ký nhận tin (Subscription):**
+   * Dashboard gửi `SUBSCRIBE` với Topic Wildcard `iot/+/+/+/telemetry` và `iot/+/+/+/status`.
+   * Broker trả lời `SUBACK`.
+4. **Kết thúc kết nối:**
+   * *Ngắt chủ động:* Gửi gói `DISCONNECT` và đóng Socket an toàn.
+   * *Ngắt đột ngột (rớt mạng, tắt nguồn):* Broker phát hiện quá hạn KeepAlive và thay mặt Client Publish bản tin LWT `status: offline` tới Dashboard.
 
 ---
 
-## 📚 4. Giải Thích Các Khái Niệm Mạng Cốt Lõi (Lập Trình Mạng)
+## 📡 4. Thiết Kế Cấu Trúc Topic & Data Contract JSON
 
-- **Quality of Service (QoS):**
-  - **QoS 0 (At most once):** Áp dụng cho telemetry gửi liên tục (nhiệt độ, công suất). Nếu mất gói tin, gói tiếp theo sẽ cập nhật ngay.
-  - **QoS 1 (At least once):** Áp dụng cho thông điệp trạng thái (Online/Offline) và lệnh điều khiển quan trọng (bật/tắt thiết bị) để đảm bảo không bị thất lạc tin nhắn.
-- **Retained Message:**
-  - Được dùng trên các Topic `status`. Khi Dashboard vừa khởi động và Subscribe, MQTT Broker sẽ lập tức gửi lại trạng thái mới nhất của các thiết bị mà không cần chờ thiết bị phát tin mới.
-- **Last Will and Testament (LWT):**
-  - Cấu hình cho Broker biết: nếu thiết bị IoT bị ngắt kết nối đột ngột (mất mạng, rớt cáp, tắt nguồn), Broker sẽ thay mặt thiết bị Publish tin nhắn `status: offline` đến Dashboard.
-- **Clean Session / Persistent Session:**
-  - Simulators sử dụng Clean Session để kết nối nhanh. Dashboard hỗ trợ nhận lại dữ liệu lệnh/cảnh báo nhỡ khi bị mất kết nối tạm thời.
+### 4.1. Cấu trúc Topic Phân cấp Chuẩn
+Quy tắc phân cấp: `iot/{location}/{device_type}/{device_id}/{action_or_type}`
+
+| Loại Topic | Mẫu Topic Cụ Thể | QoS | Retain | Chức Năng |
+|:---|:---|:---:|:---:|:---|
+| **Telemetry** | `iot/lab/sensor/temp_hum_01/telemetry`<br>`iot/factory/sensor/air_quality_01/telemetry`<br>`iot/home/meter/power_meter_01/telemetry`<br>`iot/home/light/smart_light_01/telemetry`<br>`iot/lab/security/door_sensor_01/telemetry` | `0` | `false` | Thiết bị phát số liệu cảm biến định kỳ (2s - 5s). Dashboard subscribe bằng wildcard: `iot/+/+/+/telemetry`. |
+| **Status (LWT)**| `iot/{location}/{device_type}/{device_id}/status` | `1` | `true` | Báo trạng thái `online` khi kết nối và `offline` khi ngắt mạng (sử dụng Retain Flag để Dashboard nhận ngay khi mở lên). |
+| **Command** | `iot/{location}/{device_type}/{device_id}/cmd` | `1` | `false` | Dashboard gửi lệnh điều khiển (bật/tắt, chỉnh độ sáng) tới thiết bị đích. |
 
 ---
 
-## 📁 5. Cấu trúc Thư mục Repository & Phân chia Code
+### 4.2. Định dạng JSON Data Contract
+
+#### 1. Dữ liệu Cảm biến (`TelemetryMessage`)
+```json
+{
+  "message_id": "e85ff714-b6ad-4c16-8646-d651b8c36a1a",
+  "device_id": "temp_hum_01",
+  "device_type": "sensor",
+  "location": "lab",
+  "timestamp": "2026-09-06T07:13:16.8260620Z",
+  "data": {
+    "temperature": 29.18,
+    "humidity": 64.60,
+    "unit_temp": "°C",
+    "unit_hum": "%"
+  }
+}
+```
+
+#### 2. Trạng thái Thiết bị (`DeviceStatusMessage`)
+```json
+{
+  "message_id": "54a39df7-2ef6-4a11-b472-358fe2467d30",
+  "device_id": "temp_hum_01",
+  "status": "online",
+  "timestamp": "2026-09-06T07:12:44.1120000Z"
+}
+```
+
+#### 3. Lệnh Điều Khiển (`CommandMessage`)
+```json
+{
+  "message_id": "44980dd6-e7f3-46cd-8c2d-efffdf358bc4",
+  "command": "TOGGLE_POWER",
+  "timestamp": "2026-09-06T07:13:15.3548768Z",
+  "params": {
+    "state": "ON",
+    "brightness": 80
+  }
+}
+```
+
+---
+
+## 📚 5. Giải Thích Các Khái Niệm Mạng Cốt Lõi (Lập Trình Mạng)
+
+* **Quality of Service (QoS):**
+  * **QoS 0 (At most once - Bắn và quên):** Áp dụng cho dữ liệu cảm biến gửi liên tục (nhiệt độ, công suất). Ưu tiên tốc độ cao, độ trễ thấp; nếu mất 1 gói tin thì gói tin chu kỳ sau sẽ bù đắp ngay lập tức.
+  * **QoS 1 (At least once - Có xác nhận PUBACK):** Áp dụng cho bản tin trạng thái (Online/Offline) và lệnh điều khiển thiết bị (Bật/Tắt đèn). Đảm bảo tin nhắn bắt buộc phải đến đích thành công.
+* **Retained Message:**
+  * Được áp dụng cho Topic `status`. Broker lưu trữ lại bản tin trạng thái cuối cùng. Khi Dashboard khởi động sau thiết bị và vừa Subscribe vào Topic, Broker sẽ gửi lại ngay trạng thái mới nhất mà không cần chờ thiết bị phát tin mới.
+* **Last Will and Testament (LWT):**
+  * Khi thiết bị gửi gói `CONNECT`, nó đính kèm sẵn một "di chúc" `{"status": "offline"}`. Nếu thiết bị bị đứt cáp mạng hoặc mất nguồn đột ngột, Broker sẽ tự động phát bản tin LWT này thay cho thiết bị để báo cho Dashboard biết thiết bị đã Offline.
+* **Clean Session vs Persistent Session:**
+  * Simulators sử dụng `CleanSession = true` để kết nối nhanh và dọn dẹp hàng đợi cũ. Dashboard hỗ trợ tự động Re-subscribe lại toàn bộ Topic sau khi có mạng lại.
+
+---
+
+## 🛡️ 6. Xử Lý Lỗi, Độ Tin Cậy & Bảo Mật
+
+1. **Chống treo giao diện người dùng (WPF UI Thread Safety):**
+   * Mọi sự kiện nhận tin từ luồng nền MQTTnet đều được đồng bộ vào UI Thread thông qua `Dispatcher.Invoke`, đảm bảo giao diện luôn mượt mà khi nhận dữ liệu với tần suất cao.
+2. **Bộ lọc Message Trùng (Deduplication):**
+   * Sử dụng `HashSet<string>` kết hợp `Queue<string>` lưu trữ 100 `message_id` gần nhất trong bộ nhớ. Bỏ qua các bản tin trùng lặp do cơ chế truyền lại của QoS 1.
+3. **Bộ lọc Message Đến Trễ (Out-of-order Message Filtering):**
+   * So sánh trường `timestamp` (UTC) của bản tin nhận được với `lastProcessedTimestamp` của thiết bị. Nếu nhận được tin nhắn cũ đến sau do độ trễ mạng thì không ghi đè dữ liệu Real-time.
+4. **Cơ chế Tự động Kết nối lại (Auto-reconnect với Exponential Backoff):**
+   * Khi mất kết nối ngoài ý muốn (Broker sập hoặc rớt mạng), `MqttHelper` kích hoạt vòng lặp thử lại với thời gian tăng dần: $2s \rightarrow 4s \rightarrow 8s \rightarrow 16s \rightarrow 30s$ nhằm tránh nghẽn mạng.
+5. **Cảnh báo Ngưỡng Bất Thường (Threshold Alerting):**
+   * Dashboard tự động phát hiện các chỉ số vượt ngưỡng an toàn:
+     * Nhiệt độ $> 40^\circ\text{C}$ $\rightarrow$ Báo động quá nhiệt.
+     * Công suất $> 3000\text{W}$ $\rightarrow$ Báo động quá tải điện.
+     * Chỉ số AQI $> 150$ $\rightarrow$ Báo động chất lượng không khí nguy hại.
+   * Đổi màu đèn LED chỉ thị sang màu **Đỏ cam (`OrangeRed`)** và xuất cảnh báo trên Console Log.
+6. **Bảo mật & Quản lý Tài nguyên:**
+   * Không hard-code mật khẩu/private key trong mã nguồn; tham số kết nối IP/Port hoàn toàn cấu hình động qua GUI và CLI.
+   * Toàn bộ luồng nền `Task.Delay` đều liên kết với `CancellationTokenSource` và giải phóng Socket/Client sạch sẽ khi ứng dụng dừng (`Dispose`/`DisconnectAsync`).
+
+---
+
+## 📁 7. Cấu Trúc Thư Mục Repository Chuẩn
 
 ```text
 UDM_21-Monitoring-IoT-devices-via-MQTT/
-├── .vscode/                       # Cấu hình F5 Debug & Build tự động cho Visual Studio Code
-│   ├── launch.json                # Cấu hình F5 Debug cả Dashboard & Simulators
-│   ├── tasks.json                 # Cấu hình dotnet build & dotnet run
-│   └── settings.json              # Chỉ định UDM_21.sln mặc định
-├── Code/                          # Mã nguồn chính C# .NET 8
-│   ├── UDM_21.sln                 # Visual Studio Solution File
-│   ├── Dashboard/                 # WPF Desktop Dashboard App (Thành viên 1 & Thành viên 2)
-│   │   ├── Controllers/           # MqttController (Giao tiếp MQTTnet & WPF Dispatcher) - TV 2
-│   │   ├── Models/                # DeviceItem (INotifyPropertyChanged DataBinding) - TV 2
+├── .vscode/                               # Cấu hình F5 Debug & Build tự động cho Visual Studio Code
+│   ├── launch.json                        # Cấu hình Debug đồng thời Dashboard & Simulators
+│   ├── tasks.json                         # Tasks tự động dotnet build
+│   └── settings.json
+├── Code/                                  # Mã nguồn chính (.NET 8 C#)
+│   ├── UDM_21.sln                         # Solution chứa 3 Projects
+│   ├── Dashboard/                         # WPF Desktop Dashboard Application
+│   │   ├── Controllers/MqttController.cs  # Điều phối MQTTnet, Deduplication & Dispatcher
+│   │   ├── Models/DeviceItem.cs           # Model implement INotifyPropertyChanged
+│   │   ├── Services/TelemetryHistoryManager.cs # Quản lý 20 bản tin lịch sử gần nhất
 │   │   ├── App.xaml / App.xaml.cs
-│   │   ├── MainWindow.xaml        # Giao diện WPF (DataGrid, Form phát lệnh, Console Log) - TV 1
-│   │   └── MainWindow.xaml.cs     # Event Handler (Xử lý không treo GUI) - TV 2
-│   ├── Simulators/                # C# Console App Giả lập 5+ Thiết bị (Thành viên 3)
-│   │   ├── Devices/               # 5 loại thiết bị cảm biến & công tơ điện - TV 3
-│   │   ├── DeviceBase.cs          # Abstract class thiết bị IoT (Multi-threading, LWT) - TV 3
-│   │   ├── Program.cs             # Khởi chạy đồng thời 5 thiết bị - TV 3
-│   │   └── config.json            # Cấu hình các thiết bị giả lập - TV 3
-│   ├── Shared/                    # Class Library dùng chung (Thành viên 4)
-│   │   ├── MqttHelper.cs          # Wrapper gói thư viện MQTTnet v4.x - TV 4
-│   │   └── Protocol.cs            # Data Contract JSON (Telemetry, Status, Command) - TV 4
-│   └── config.example.json        # Cấu hình MQTT Broker mẫu
-├── DOCX/                          # Nơi lưu báo cáo bài tập lớn (.docx) (Thành viên 5)
+│   │   ├── MainWindow.xaml / .cs          # Giao diện chính (DataGrid, Form lệnh, Console)
+│   │   └── TelemetryHistoryWindow.xaml/.cs # Cửa sổ xem lịch sử chi tiết 20 bản ghi
+│   ├── Simulators/                        # C# Console App Giả lập 5+ Thiết bị IoT
+│   │   ├── Devices/                       # 5 loại thiết bị cảm biến độc lập
+│   │   │   ├── TempHumidityDevice.cs      # Nhiệt độ, độ ẩm (giả lập tăng vọt > 40°C)
+│   │   │   ├── AirQualityDevice.cs        # AQI, CO2 ppm
+│   │   │   ├── PowerMeterDevice.cs        # Điện áp, dòng điện, công suất, tổng kWh
+│   │   │   ├── SmartLightDevice.cs        # Đèn thông minh (Bật/Tắt, độ sáng, phản hồi tức thì)
+│   │   │   └── DoorSensorDevice.cs        # Cảm biến cửa, mức pin
+│   │   ├── DeviceBase.cs                  # Lớp trừu tượng đa luồng, LWT, Telemetry Loop
+│   │   └── Program.cs                     # Điểm khởi chạy 5 thiết bị
+│   └── Shared/                            # Class Library dùng chung
+│       ├── MqttHelper.cs                  # Wrapper MQTTnet v4, QoS 0/1, Auto-reconnect Backoff
+│       └── Protocol.cs                    # JSON Data Contract (Telemetry, Status, Command)
+├── DOCX/                                  # Báo cáo đồ án chính thức
+│   ├── Bao_Cao_UDM_21_Giam_Sat_IoT_MQTT.docx
 │   └── README.md
-├── Extra/                         # Thư mục logs & kết quả kiểm thử (Thành viên 5)
-│   ├── logs/                      # Nhật ký hệ thống - TV 5
-│   ├── test_results/              # Kết quả stress test / performance test - TV 5
-│   └── scripts/                   # Script kiểm thử độ trễ & throughput - TV 5
-├── PPTX/                          # Slide thuyết trình bảo vệ (.pptx) (Thành viên 5)
+├── Extra/                                 # Tài liệu kiểm thử & công cụ bổ trợ
+│   ├── logs/                              # Nhật ký chạy hệ thống
+│   ├── scripts/                           # Script Python kiểm thử
+│   │   ├── test_runner.py                 # Script test tự động toàn diện 5 Test Cases
+│   │   ├── stress_test.py                 # Script đo Throughput & Latency 2 mức tải
+│   │   └── create_github_issues.py        # Script tự động đồng bộ 19 Issues lên GitHub
+│   └── test_results/                      # Kết quả đo đạc kiểm thử
+│       ├── test_report.json               # Dữ liệu kiểm thử JSON
+│       └── Bao_Cao_Kiem_Thu_He_Thong.md   # Báo cáo kiểm thử chi tiết Markdown
+├── PPTX/                                  # Slide thuyết trình bảo vệ đồ án
+│   ├── Slide_Thuyet_Trinh_UDM_21.pptx
 │   └── README.md
-├── .gitignore                     # Gitignore chuẩn C# / Visual Studio (.NET)
-└── README.md                      # Tài liệu hướng dẫn & thông tin dự án
+├── run.bat                                # Script khởi chạy 1-Click toàn bộ hệ thống
+├── .gitignore                             # Loại trừ build artifacts (bin, obj, .vs)
+└── README.md                              # Tài liệu hướng dẫn & Báo cáo tổng quan dự án
 ```
 
 ---
 
-## 🚀 6. Hướng dẫn Khởi chạy Dự án
+## 🚀 8. Hướng Dẫn Cài Đặt & Khởi Chạy Dự Án
 
-### Cách 1: Sử dụng Visual Studio Code (Khuyên dùng)
-1. Cài đặt Extension **C# Dev Kit** trên VS Code.
-2. Mở thư mục dự án trong VS Code.
-3. Nhấn `Ctrl + Shift + D`, chọn configuration: **`🚀 Debug All (Simulators + Dashboard)`**.
-4. Nhấn **`F5`** để chạy tự động cả 5 Thiết bị giả lập và WPF Dashboard!
+### Yêu cầu môi trường:
+* Hệ điều hành: Windows 10/11 (64-bit).
+* **.NET SDK 8.0 trở lên** (Tải tại [dotnet.microsoft.com](https://dotnet.microsoft.com/download/dotnet/8.0)).
+* Visual Studio 2022 (với Workload *.NET Desktop Development*) hoặc Visual Studio Code (với Extension *C# Dev Kit*).
+* Python 3.8+ (để chạy script kiểm thử hiệu năng).
 
-### Cách 2: Sử dụng Visual Studio 2022
-1. Mở file `Code/UDM_21.sln`.
-2. Phải chuột vào Solution -> chọn **Set Startup Projects...** -> chọn **Multiple startup projects**:
-   - `Simulators` -> **Start**
-   - `Dashboard` -> **Start**
-3. Nhấn **`F5`** để khởi chạy.
+---
 
-### Cách 3: Sử dụng .NET CLI
+### Cách 1: Khởi chạy 1-Click bằng file `run.bat` (Khuyên dùng)
+1. Mở thư mục dự án trên máy.
+2. Nhấp đúp chuột vào file **`run.bat`**.
+3. Hệ thống sẽ tự động khởi động đồng thời:
+   * **Cửa sổ 1:** 5 Thiết bị giả lập IoT (kết nối `broker.emqx.io:1883`).
+   * **Cửa sổ 2:** Giao diện WPF Dashboard tự động kết nối và nhận dữ liệu thời gian thực.
+
+---
+
+### Cách 2: Sử dụng .NET CLI từ Terminal
+Mở 2 cửa sổ Terminal độc lập tại thư mục gốc của dự án:
+
 ```bash
-# Terminal 1: Chạy các thiết bị giả lập
-dotnet run --project Code/Simulators/Simulators.csproj
+# Terminal 1: Chạy 5 Thiết bị giả lập IoT
+dotnet run --project Code/Simulators/Simulators.csproj broker.emqx.io 1883
 
-# Terminal 2: Chạy ứng dụng Dashboard WPF
+# Terminal 2: Chạy Giao diện WPF Dashboard
 dotnet run --project Code/Dashboard/Dashboard.csproj
 ```
----
 
-## ✅ 7. Kết quả đạt được
-
-Dự án đã xây dựng thành công hệ thống giám sát và điều khiển thiết bị IoT thông qua giao thức MQTT bằng ngôn ngữ C# .NET 8.
-
-
-### Các chức năng đã hoàn thành
-
-✅ Xây dựng Dashboard Desktop bằng WPF hiển thị dữ liệu thiết bị theo thời gian thực.
-
-✅ Mô phỏng đồng thời 5 thiết bị IoT:
-- Temperature & Humidity Sensor
-- Air Quality Sensor
-- Power Meter
-- Smart Light
-- Door Sensor
-
-✅ Thiết bị gửi dữ liệu Telemetry định kỳ tới MQTT Broker theo mô hình Publish/Subscribe.
-
-✅ Dashboard Subscribe dữ liệu từ nhiều Topic MQTT và cập nhật giao diện theo thời gian thực.
-
-✅ Hiển thị trạng thái Online/Offline của thiết bị thông qua Last Will and Testament (LWT).
-
-✅ Hỗ trợ gửi lệnh điều khiển từ Dashboard tới thiết bị.
-
-✅ Triển khai cơ chế Command ACK giúp xác nhận lệnh điều khiển đã được thiết bị tiếp nhận.
-
-✅ Hỗ trợ MQTT Logging để theo dõi toàn bộ hoạt động Publish, Subscribe và Command.
-
-✅ Tự động kết nối lại (Auto Reconnect) khi Broker hoặc Client bị mất kết nối.
-
-✅ Quản lý lịch sử Telemetry thông qua TelemetryHistoryManager.
-
-✅ Hỗ trợ cảnh báo dữ liệu bất thường (Anomaly Alert) phục vụ giám sát hệ thống.
-
-✅ Sử dụng Unique Client ID cho từng thiết bị nhằm tránh xung đột kết nối MQTT.
-
-✅ Thực hiện Stress Test nhằm đánh giá độ ổn định và khả năng xử lý nhiều thông điệp MQTT liên tục.
-
-✅ Hoàn thiện báo cáo và slide thuyết trình .
-
-
-
-### Kết quả kiểm thử
-
-- Dashboard nhận dữ liệu Telemetry ổn định từ nhiều thiết bị đồng thời.
-- Thiết bị tự động cập nhật trạng thái Online/Offline khi kết nối thay đổi.
-- Lệnh điều khiển được gửi và xác nhận thành công thông qua ACK Protocol.
-- Hệ thống duy trì hoạt động ổn định khi thực hiện Stress Test với số lượng lớn thông điệp MQTT.
-- Chức năng Auto Reconnect hoạt động đúng khi Broker bị ngắt kết nối tạm thời.
-
-### Công nghệ sử dụng
-
-- C# .NET 8
-- WPF
-- MQTTnet
-- MQTT Broker (Mosquitto / EMQX)
-- JSON Serialization
-- Git & GitHub
+> **Mẹo sử dụng Broker Nội Bộ (Local Broker):**
+> Nếu muốn chạy hoàn toàn Offline bằng Mosquitto nội bộ, bạn chỉ cần gõ:
+> `dotnet run --project Code/Simulators/Simulators.csproj localhost 1883`
 
 ---
 
-## 📊 8. Đánh giá kết quả
+## 📊 9. Kết Quả Kiểm Thử Chức Năng & Stress Test Hiệu Năng
 
-Hệ thống hoạt động ổn định với nhiều thiết bị gửi dữ liệu đồng thời.
+Hệ thống đã được kiểm thử tự động toàn diện thông qua script `Extra/scripts/test_runner.py` kết nối trực tiếp với Public Broker `broker.emqx.io:1883`:
 
-Dashboard có khả năng cập nhật dữ liệu theo thời gian thực và hiển thị trạng thái thiết bị chính xác.
+### 9.1. Bảng Tổng Hợp Kiểm Thử Chức Năng (Functional Test)
 
-Chức năng Auto Reconnect giúp hệ thống duy trì hoạt động khi Broker bị ngắt kết nối tạm thời.
-
-Command ACK giúp xác nhận việc thực thi lệnh điều khiển từ Dashboard tới thiết bị.
-
-MQTT Logging hỗ trợ theo dõi và xử lý lỗi trong quá trình vận hành hệ thống.
-
-Dự án đáp ứng đầy đủ các yêu cầu của đề tài môn Lập Trình Mạng.
-
----
-
-## 🤝 9. Đánh giá đóng góp thành viên
-
-| Thành viên | Vai trò | Mức độ hoàn thành |
-|------------|----------|------------------|
-| Vũ Ngọc Cát Chương | Giao diện Dashboard WPF | Hoàn thành tốt |
-| Huỳnh Nữ Huyền Trâm | Logic Dashboard | Hoàn thành tốt |
-| Phan Văn Đình | Thiết bị IoT giả lập | Hoàn thành tốt |
-| Huỳnh Gia Hợp | MQTT Protocol, Logging, Auto Reconnect, ACK Protocol | Hoàn thành tốt |
-| Lưu Đình Thuận | Kiểm thử, Báo cáo, Slide | Hoàn thành tốt |
-
-Tất cả thành viên đều hoàn thành nhiệm vụ được phân công đúng tiến độ, phối hợp hiệu quả trong quá trình phát triển dự án và không phát sinh mâu thuẫn trong quá trình làm việc nhóm.
+| Mã TC | Test Case | Tiêu Chuẩn Đánh Giá | Kết Quả Thực Tế | Trạng Thái |
+|:---:|:---|:---|:---|:---:|
+| **TC-01** | **Khởi tạo 5 Thiết bị Online** | 5/5 thiết bị gửi trạng thái `online` có cờ `Retain = true` và thiết lập LWT khi kết nối. | Nhận đủ 5 trạng thái Online từ `temp_hum_01`, `air_quality_01`, `power_meter_01`, `smart_light_01`, `door_sensor_01`. | **✅ PASS** |
+| **TC-02** | **Chuẩn hóa JSON Protocol** | Mỗi bản tin dữ liệu cảm biến phải có `message_id` (GUID duy nhất) và `timestamp` (UTC ISO-8601). | 100% bản tin nhận về đều có GUID hợp lệ và thời gian UTC chuẩn xác. | **✅ PASS** |
+| **TC-03** | **Phát Lệnh & Phản Hồi Real-time** | Gửi lệnh `TOGGLE_POWER` (`state: ON`) tới đèn thông minh `smart_light_01`. | Thiết bị `smart_light_01` nhận lệnh, đổi trạng thái sang `ON`, công suất `12W` và phát ngay Telemetry phản hồi tức thì. | **✅ PASS** |
+| **TC-04** | **Cảnh Báo Vượt Ngưỡng** | `temp_hum_01` định kỳ phát giá trị nhiệt độ đột biến > 40°C để kích hoạt cảnh báo. | Bắt thành công **2 lần** nhiệt độ cao bất thường ($52.14^\circ\text{C}$ và $51.89^\circ\text{C}$) kích hoạt đèn cảnh báo đỏ cam. | **✅ PASS** |
+| **TC-05** | **Stress Test 2 Mức Tải (QoS 1)** | Gửi 500 msgs (Tải nhẹ) & 2.000 msgs (Tải nặng) đo Throughput và Latency. | Tỷ lệ xác nhận gói tin (PUBACK) đạt **100.0%** (không rớt gói nào). | **✅ PASS** |
 
 ---
 
-## 🎯 Kết luận
+### 9.2. Đo Đạc Hiệu Năng & Thông Lượng (Performance Benchmark)
 
-Dự án đã áp dụng thành công giao thức MQTT để xây dựng hệ thống giám sát và điều khiển thiết bị IoT theo mô hình Publish/Subscribe.
+| Mức Tải | Số Lượng Message | QoS Level | Tỷ Lệ Nhận Thành Công (ACK) | Tổng Thời Gian | Thông Lượng (Throughput) | Độ Trễ TB (Latency) |
+|:---|:---:|:---:|:---:|:---:|:---:|:---:|
+| **Mức 1 (Tải nhẹ)** | 500 msgs | QoS 1 | **100.0% (500/500)** | 8.03 s | **62.30 msg/giây** | **16.05 ms/msg** |
+| **Mức 2 (Tải nặng)** | 2.000 msgs | QoS 1 | **100.0% (2.000/2.000)** | 15.03 s | **62.28 msg/giây** | **7.51 ms/msg** |
 
-Thông qua dự án, nhóm đã hiểu rõ hơn về lập trình mạng, giao thức MQTT, cơ chế QoS, Last Will & Testament (LWT), Auto Reconnect, Command ACK và việc xây dựng hệ thống IoT theo thời gian thực.
+---
 
-Hệ thống có thể tiếp tục mở rộng trong tương lai bằng cách tích hợp cơ sở dữ liệu, nền tảng Cloud hoặc các thiết bị IoT thực tế.
+## 🎯 10. Giới Hạn Sản Phẩm & Hướng Phát Triển
+
+### Giới hạn sản phẩm:
+* Dự án tập trung vào lập trình mạng tầng ứng dụng qua MQTT; các thiết bị phần cứng cảm biến được giả lập trên tiến trình phần mềm C# đa luồng thay vì mạch vi điều khiển ESP32/Arduino vật lý.
+* Dữ liệu lịch sử 20 bản tin đo gần nhất được lưu trữ tạm thời trong bộ nhớ RAM (`TelemetryHistoryManager`), chưa tích hợp cơ sở dữ liệu quan hệ (SQL/NoSQL) để lưu trữ dài hạn nhiều tháng.
+
+### Hướng phát triển tương lai:
+* Tích hợp cơ sở dữ liệu thời gian thực (InfluxDB / TimescaleDB) để vẽ biểu đồ đường (Line Chart) trực quan hóa xu hướng nhiệt độ và công suất tiêu thụ theo thời gian.
+* Tích hợp giao thức bảo mật Transport Layer Security (MQTT qua TLS/SSL Port 8883) với chứng chỉ số X.509 để mã hóa gói tin trên đường truyền.
+* Phát triển ứng dụng Mobile (.NET MAUI) để quản trị viên có thể nhận thông báo đẩy (Push Notification) khi có cảnh báo cháy hoặc rò rỉ khí độc từ xa.
