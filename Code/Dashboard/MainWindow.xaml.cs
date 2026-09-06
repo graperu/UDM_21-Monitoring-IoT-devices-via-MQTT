@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Media;
 using Newtonsoft.Json;
 using UDM_21.Dashboard.Controllers;
@@ -195,6 +196,32 @@ namespace UDM_21.Dashboard
                     $"[STATUS] Device {statusMsg.DeviceId} " +
                     $"is {statusMsg.Status.ToUpper()}");
             });
+        }
+
+        // =========================================================================
+        // SỰ KIỆN CHỌN THIẾT BỊ TRÊN DATAGRID - HIỂN THỊ LỊCH SỬ LÊN UI (ISSUE #8)
+        // =========================================================================
+        private void DgDevices_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            // 1. Kiểm tra sự kiện chọn thiết bị trên DataGrid
+            if (DgDevices.SelectedItem is DeviceItem selected)
+            {
+                // Đồng bộ ComboBox (nếu có)
+                if (CmbDevices != null)
+                {
+                    CmbDevices.SelectedItem = selected;
+                }
+
+                // 2. Lấy 20 bản tin lịch sử từ _historyManager dựa vào DeviceId
+                var history = _historyManager.GetHistory(selected.DeviceId);
+
+                // 3. Gán danh sách lịch sử vào ItemsSource của DataGrid Lịch sử
+                // Trường hợp file XAML đặt tên DataGrid lịch sử khác 'DgHistory', hãy đổi tên ở đây
+                if (DgHistory != null)
+                {
+                    DgHistory.ItemsSource = history;
+                }
+            }
         }
 
         private async void BtnSendCmd_Click(
