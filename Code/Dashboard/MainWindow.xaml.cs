@@ -52,6 +52,26 @@ namespace UDM_21.Dashboard
 
         private void MainWindow_Loaded(object sender, RoutedEventArgs e)
         {
+            var savedDevices = _historyManager.GetLatestMessages();
+            foreach (var message in savedDevices)
+            {
+                MessageValidator.TryParseUtcTimestamp(message.Timestamp, out var timestamp);
+                _devices.Add(new DeviceItem
+                {
+                    DeviceId = message.DeviceId,
+                    DeviceType = message.DeviceType,
+                    Location = message.Location,
+                    IsOnline = false,
+                    LastSeen = timestamp == default
+                        ? message.Timestamp
+                        : timestamp.ToLocalTime().ToString("G"),
+                    RawTelemetryData = message.Data,
+                    LatestTelemetrySummary = message.DataJson
+                });
+            }
+
+            LogConsole($"[HISTORY] SQLite: {_historyManager.DatabasePath}");
+            LogConsole($"[HISTORY] Đã nạp {savedDevices.Count} thiết bị từ phiên trước.");
             BtnConnect_Click(this, new RoutedEventArgs());
         }
 
