@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using UDM_21.Simulators.Devices;
+using UDM_21.Shared;
 
 namespace UDM_21.Simulators
 {
@@ -32,22 +33,50 @@ namespace UDM_21.Simulators
             };
 
             Console.WriteLine($"Connecting 5 devices to Broker {host}:{port}...");
-
-            foreach (var dev in devices)
+            var exitRequested = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            Console.CancelKeyPress += (_, eventArgs) =>
             {
-                await dev.StartAsync(host, port);
-            }
+                eventArgs.Cancel = true;
+                exitRequested.TrySetResult(true);
+            };
 
-            Console.WriteLine("All 5 IoT Simulators are running. Press Enter to exit.");
-            Console.ReadLine();
-
-            Console.WriteLine("Stopping all devices...");
-            foreach (var dev in devices)
+            try
             {
-                await dev.StopAsync();
-            }
+                foreach (var dev in devices)
+                {
+                    await dev.StartAsync(host, port);
+                }
 
-            Console.WriteLine("Simulators stopped cleanly.");
+                Console.WriteLine("All 5 IoT Simulators are running. Press Enter or Ctrl+C to exit.");
+                _ = Task.Run(() =>
+                {
+                    Console.ReadLine();
+                    exitRequested.TrySetResult(true);
+                });
+                await exitRequested.Task;
+            }
+            catch (Exception ex)
+            {
+                AppLogger.Error("SIMULATOR_FATAL", ex);
+                Console.Error.WriteLine($"[FATAL] {ex.Message}");
+            }
+            finally
+            {
+                Console.WriteLine("Stopping all devices...");
+                foreach (var dev in devices)
+                {
+                    try
+                    {
+                        await dev.DisposeAsync();
+                    }
+                    catch (Exception ex)
+                    {
+                        AppLogger.Error("DEVICE_SHUTDOWN_FAILED", ex);
+                    }
+                }
+
+                Console.WriteLine("Simulators stopped cleanly.");
+            }
         }
     }
 }

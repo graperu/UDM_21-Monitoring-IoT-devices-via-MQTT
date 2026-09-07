@@ -43,7 +43,7 @@
 
                 <!-- Top Left: Device List -->
                 <GroupBox Header="Danh Sách Thiết Bị &amp; Dữ Liệu Real-Time" Grid.Row="0" Margin="0,0,0,5">
-                    <DataGrid x:Name="DgDevices" AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" SelectionChanged="DgDevices_SelectionChanged">
+                    <DataGrid x:Name="DgDevices" AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" SelectionChanged="DgDevices_SelectionChanged" MouseDoubleClick="DgDevices_MouseDoubleClick">
                         <DataGrid.Columns>
                             <DataGridTextColumn Header="Device ID" Binding="{Binding DeviceId}" Width="120"/>
                             <DataGridTextColumn Header="Loại" Binding="{Binding DeviceType}" Width="80"/>
@@ -113,9 +113,11 @@
                         <TextBox x:Name="TxtCommand" Text="TOGGLE_POWER" Margin="0,0,0,8"/>
 
                         <TextBlock Text="Tham Số (JSON):" Margin="0,0,0,3"/>
+                        <!-- Tiền tố {} là cú pháp escape của XAML; giá trị hiển thị thực tế là JSON {"state": "ON"}. -->
                         <TextBox x:Name="TxtParams" Text="{}{&quot;state&quot;: &quot;ON&quot;}" Margin="0,0,0,10"/>
 
-                        <Button x:Name="BtnSendCmd" Content="Phát Lệnh Qua MQTT" Height="30" Click="BtnSendCmd_Click" Background="#007bff" Foreground="White" FontWeight="Bold"/>
+                        <Button x:Name="BtnSendCmd" Content="Phát Lệnh Qua MQTT" Height="30" Click="BtnSendCmd_Click" Background="#007bff" Foreground="White" FontWeight="Bold" IsEnabled="False"/>
+                        <TextBlock x:Name="LblCommandStatus" Text="Chưa gửi lệnh" Margin="0,6,0,0" Foreground="Gray" TextWrapping="Wrap"/>
                     </StackPanel>
                 </GroupBox>
 

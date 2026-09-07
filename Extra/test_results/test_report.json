@@ -1,6 +1,16 @@
 {
-  "timestamp": "2026-09-06 14:12:42",
+  "timestamp": "2026-09-07 12:06:06",
   "broker": "broker.emqx.io:1883",
+  "environment": {
+    "machine": "graperu",
+    "os": "Windows-11-10.0.26200-SP0",
+    "processor": "Intel64 Family 6 Model 141 Stepping 1, GenuineIntel",
+    "logical_cpu_count": 12,
+    "total_memory_mb": 16122,
+    "python_version": "3.14.0",
+    "dotnet_sdk_version": "10.0.100",
+    "paho_mqtt_version": "2.1.0"
+  },
   "test_cases": {
     "TC1_5_Devices_Online": {
       "description": "5/5 Thiết bị IoT gửi trạng thái Online qua LWT Retained topic",
@@ -8,9 +18,9 @@
       "details": "5/5 thiết bị đã báo online",
       "devices_found": [
         "air_quality_01",
-        "smart_light_01",
-        "power_meter_01",
         "door_sensor_01",
+        "power_meter_01",
+        "smart_light_01",
         "temp_hum_01"
       ]
     },
@@ -20,49 +30,49 @@
       "details": "Đã nhận telemetry từ 5/5 thiết bị",
       "samples": {
         "temp_hum_01": {
-          "message_id": "e85ff714-b6ad-4c16-8646-d651b8c36a1a",
+          "message_id": "d5646f91-6637-4d73-a2e2-8f8b06844bda",
           "device_id": "temp_hum_01",
           "device_type": "sensor",
           "location": "lab",
-          "timestamp": "2026-09-06T07:13:16.8260620Z",
+          "timestamp": "2026-09-07T05:06:42.3755777Z",
           "data": {
-            "temperature": 29.18,
-            "humidity": 64.6,
+            "temperature": 29.24,
+            "humidity": 62.18,
             "unit_temp": "°C",
             "unit_hum": "%"
           }
         },
         "air_quality_01": {
-          "message_id": "f5bcebf4-3b0d-402f-8e49-9491bd8ee553",
+          "message_id": "50468911-a9d9-4c2f-a781-2deec4e03a3c",
           "device_id": "air_quality_01",
           "device_type": "sensor",
           "location": "factory",
-          "timestamp": "2026-09-06T07:13:15.5838246Z",
+          "timestamp": "2026-09-07T05:06:41.7468043Z",
           "data": {
-            "aqi": 88.6,
-            "co2_ppm": 421.9,
+            "aqi": 85.6,
+            "co2_ppm": 462.3,
             "air_status": "GOOD"
           }
         },
         "power_meter_01": {
-          "message_id": "ad52566d-a9d4-4d0a-bfdc-61c97d7d8761",
+          "message_id": "b39651d9-0c16-4a2f-bebc-5e8ead27bf36",
           "device_id": "power_meter_01",
           "device_type": "meter",
           "location": "home",
-          "timestamp": "2026-09-06T07:13:16.3918552Z",
+          "timestamp": "2026-09-07T05:06:41.2478373Z",
           "data": {
-            "voltage_v": 218.1,
-            "current_a": 4.48,
-            "power_watt": 977.1,
+            "voltage_v": 220.5,
+            "current_a": 4.34,
+            "power_watt": 957.0,
             "total_kwh": 120.01
           }
         },
         "smart_light_01": {
-          "message_id": "44980dd6-e7f3-46cd-8c2d-efffdf358bc4",
+          "message_id": "15ad040c-a953-45d2-983b-f57f5da651f4",
           "device_id": "smart_light_01",
           "device_type": "light",
           "location": "home",
-          "timestamp": "2026-09-06T07:13:15.3548768Z",
+          "timestamp": "2026-09-07T05:06:41.5435124Z",
           "data": {
             "state": "ON",
             "brightness": 80,
@@ -70,13 +80,13 @@
           }
         },
         "door_sensor_01": {
-          "message_id": "9db081b0-0509-48ab-b2b4-b0e38cbe7854",
+          "message_id": "7cfca4e4-3fe5-4243-a63b-7a8552432baa",
           "device_id": "door_sensor_01",
           "device_type": "security",
           "location": "lab",
-          "timestamp": "2026-09-06T07:13:16.1282067Z",
+          "timestamp": "2026-09-07T05:06:42.8396584Z",
           "data": {
-            "door_state": "OPEN",
+            "door_state": "CLOSED",
             "battery_pct": 98,
             "tamper_alert": false
           }
@@ -87,11 +97,11 @@
       "description": "Thiết bị smart_light_01 nhận lệnh TOGGLE_POWER và phản hồi state=ON tức thì",
       "passed": true,
       "details": {
-        "message_id": "44980dd6-e7f3-46cd-8c2d-efffdf358bc4",
+        "message_id": "15ad040c-a953-45d2-983b-f57f5da651f4",
         "device_id": "smart_light_01",
         "device_type": "light",
         "location": "home",
-        "timestamp": "2026-09-06T07:13:15.3548768Z",
+        "timestamp": "2026-09-07T05:06:41.5435124Z",
         "data": {
           "state": "ON",
           "brightness": 80,
@@ -105,16 +115,16 @@
       "details": [
         {
           "device": "temp_hum_01",
-          "temp": 52.14,
+          "temp": 53.53,
           "payload": {
-            "message_id": "341ecbfb-321a-4681-bc5b-79bda3bdc94b",
+            "message_id": "6f99e4d5-55e6-4c7d-aa25-4f1e45d721af",
             "device_id": "temp_hum_01",
             "device_type": "sensor",
             "location": "lab",
-            "timestamp": "2026-09-06T07:12:58.7798203Z",
+            "timestamp": "2026-09-07T05:06:24.3366460Z",
             "data": {
-              "temperature": 52.14,
-              "humidity": 67.27,
+              "temperature": 53.53,
+              "humidity": 66.26,
               "unit_temp": "°C",
               "unit_hum": "%"
             }
@@ -122,16 +132,16 @@
         },
         {
           "device": "temp_hum_01",
-          "temp": 51.89,
+          "temp": 52.95,
           "payload": {
-            "message_id": "c16e75ca-d9d4-4057-a655-5b97d9b2fc3f",
+            "message_id": "14747d6d-4f7c-4471-ad13-07cdc86a582c",
             "device_id": "temp_hum_01",
             "device_type": "sensor",
             "location": "lab",
-            "timestamp": "2026-09-06T07:13:13.8198432Z",
+            "timestamp": "2026-09-07T05:06:39.3622541Z",
             "data": {
-              "temperature": 51.89,
-              "humidity": 63.86,
+              "temperature": 52.95,
+              "humidity": 64.13,
               "unit_temp": "°C",
               "unit_hum": "%"
             }
@@ -146,18 +156,24 @@
         "Muc_1_Tai_Nhe_500_msgs": {
           "total_sent": 500,
           "acked_count": 500,
-          "duration_sec": 8.025,
-          "throughput_msg_sec": 62.3,
-          "avg_latency_ms": 16.05,
-          "success_rate_pct": 100.0
+          "duration_sec": 7.011,
+          "throughput_msg_sec": 71.32,
+          "avg_latency_ms": 3508.85,
+          "p95_latency_ms": 6559.0,
+          "success_rate_pct": 100.0,
+          "timeout_sec": 15,
+          "passed": true
         },
         "Muc_2_Tai_Nang_2000_msgs": {
           "total_sent": 2000,
           "acked_count": 2000,
-          "duration_sec": 15.029,
-          "throughput_msg_sec": 62.28,
-          "avg_latency_ms": 7.51,
-          "success_rate_pct": 100.0
+          "duration_sec": 28.616,
+          "throughput_msg_sec": 69.89,
+          "avg_latency_ms": 13908.74,
+          "p95_latency_ms": 27284.66,
+          "success_rate_pct": 100.0,
+          "timeout_sec": 50.0,
+          "passed": true
         }
       }
     }
@@ -171,18 +187,24 @@
     "Muc_1_Tai_Nhe_500_msgs": {
       "total_sent": 500,
       "acked_count": 500,
-      "duration_sec": 8.025,
-      "throughput_msg_sec": 62.3,
-      "avg_latency_ms": 16.05,
-      "success_rate_pct": 100.0
+      "duration_sec": 7.011,
+      "throughput_msg_sec": 71.32,
+      "avg_latency_ms": 3508.85,
+      "p95_latency_ms": 6559.0,
+      "success_rate_pct": 100.0,
+      "timeout_sec": 15,
+      "passed": true
     },
     "Muc_2_Tai_Nang_2000_msgs": {
       "total_sent": 2000,
       "acked_count": 2000,
-      "duration_sec": 15.029,
-      "throughput_msg_sec": 62.28,
-      "avg_latency_ms": 7.51,
-      "success_rate_pct": 100.0
+      "duration_sec": 28.616,
+      "throughput_msg_sec": 69.89,
+      "avg_latency_ms": 13908.74,
+      "p95_latency_ms": 27284.66,
+      "success_rate_pct": 100.0,
+      "timeout_sec": 50.0,
+      "passed": true
     }
   }
 }

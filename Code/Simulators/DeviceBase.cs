@@ -6,7 +6,7 @@ using UDM_21.Shared;
 
 namespace UDM_21.Simulators
 {
-    public abstract class DeviceBase
+    public abstract class DeviceBase : IAsyncDisposable
     {
         public string DeviceId { get; }
         public string DeviceType { get; }
@@ -19,6 +19,9 @@ namespace UDM_21.Simulators
 
         protected readonly MqttHelper Mqtt;
         private CancellationTokenSource? _cts;
+        private Task? _telemetryTask;
+        private bool _stopped;
+        private readonly MessageDeduplicator _processedCommandIds = new MessageDeduplicator(100);
 
         protected DeviceBase(string deviceId, string deviceType, string location, int publishIntervalSeconds = 3)
         {
@@ -37,7 +40,9 @@ namespace UDM_21.Simulators
 
         public async Task StartAsync(string brokerHost = "broker.emqx.io", int brokerPort = 1883)
         {
+            if (_cts != null) throw new InvalidOperationException($"Device {DeviceId} đã được khởi động.");
             _cts = new CancellationTokenSource();
+            _stopped = false;
 
             var lwtStatus = new DeviceStatusMessage 
             { 
@@ -49,22 +54,40 @@ namespace UDM_21.Simulators
             
             try
             {
-                await Mqtt.ConnectAsync(brokerHost, brokerPort, StatusTopic, lwtStatus.ToJson());
+                // Đăng ký trước để subscription được ghi nhớ cả khi lần kết nối đầu thất bại.
                 await Mqtt.SubscribeAsync(CmdTopic);
+                await Mqtt.ConnectAsync(brokerHost, brokerPort, StatusTopic, lwtStatus.ToJson());
                 Console.WriteLine($"[Device {DeviceId}] Online and active.");
+                AppLogger.Info("DEVICE_STARTED", $"device={DeviceId}; endpoint={brokerHost}:{brokerPort}");
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"[Device {DeviceId}] Unreachable broker '{brokerHost}:{brokerPort}' ({ex.Message}). Auto-reconnect active...");
+                AppLogger.Error("DEVICE_CONNECT_FAILED", ex);
             }
 
             // Start telemetry publish loop regardless, auto-reconnect will re-establish session when broker is ready
-            _ = Task.Run(() => TelemetryLoopAsync(_cts.Token));
+            _telemetryTask = Task.Run(() => TelemetryLoopAsync(_cts.Token));
         }
 
         public async Task StopAsync()
         {
+            if (_stopped) return;
+            _stopped = true;
             _cts?.Cancel();
+
+            if (_telemetryTask != null)
+            {
+                try
+                {
+                    await _telemetryTask;
+                }
+                catch (OperationCanceledException)
+                {
+                    // Kết thúc bình thường khi thiết bị dừng.
+                }
+            }
+
             var offlineStatus = new DeviceStatusMessage 
             { 
                 MessageId = Guid.NewGuid().ToString(),
@@ -72,9 +95,23 @@ namespace UDM_21.Simulators
                 Status = "offline",
                 Timestamp = DateTime.UtcNow.ToString("o")
             };
-            await Mqtt.PublishAsync(StatusTopic, offlineStatus.ToJson(), MQTTnet.Protocol.MqttQualityOfServiceLevel.AtLeastOnce, retain: true);
+            if (Mqtt.IsConnected)
+            {
+                try
+                {
+                    await Mqtt.PublishAsync(StatusTopic, offlineStatus.ToJson(), MQTTnet.Protocol.MqttQualityOfServiceLevel.AtLeastOnce, retain: true);
+                }
+                catch (Exception ex)
+                {
+                    AppLogger.Error("DEVICE_OFFLINE_STATUS_FAILED", ex);
+                }
+            }
+
             await Mqtt.DisconnectAsync();
+            _cts?.Dispose();
+            _cts = null;
             Console.WriteLine($"[Device {DeviceId}] Offline and stopped.");
+            AppLogger.Info("DEVICE_STOPPED", $"device={DeviceId}");
         }
 
         private async Task TelemetryLoopAsync(CancellationToken token)
@@ -104,7 +141,14 @@ namespace UDM_21.Simulators
                     Console.WriteLine($"[Device {DeviceId}] Telemetry error: {ex.Message}");
                 }
 
-                await Task.Delay(TimeSpan.FromSeconds(PublishIntervalSeconds), token);
+                try
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(PublishIntervalSeconds), token);
+                }
+                catch (OperationCanceledException) when (token.IsCancellationRequested)
+                {
+                    break;
+                }
             }
         }
 
@@ -118,15 +162,29 @@ namespace UDM_21.Simulators
 
         private Task OnMessageReceivedAsync(string topic, string payload, MQTTnet.Protocol.MqttQualityOfServiceLevel qos, bool retain)
         {
-            if (topic == CmdTopic)
+            if (topic != CmdTopic) return Task.CompletedTask;
+
+            if (!MessageValidator.TryParseCommand(payload, out var cmd, out var error) || cmd == null)
             {
-                var cmd = CommandMessage.FromJson(payload);
-                if (cmd != null)
-                {
-                    HandleCommandAsync(cmd);
-                }
+                AppLogger.Warning("COMMAND_REJECTED", $"device={DeviceId}; reason={error}");
+                return Task.CompletedTask;
             }
-            return Task.CompletedTask;
+
+            if (!MessageValidator.TryValidateCommandForDevice(DeviceType, cmd.Command, cmd.Params, out error))
+            {
+                AppLogger.Warning("COMMAND_REJECTED", $"device={DeviceId}; reason={error}");
+                return Task.CompletedTask;
+            }
+
+            if (!_processedCommandIds.TryAccept(cmd.MessageId))
+            {
+                AppLogger.Warning("COMMAND_DUPLICATE", $"device={DeviceId}; message_id={cmd.MessageId}");
+                return Task.CompletedTask;
+            }
+
+            cmd.Command = cmd.Command.Trim().ToUpperInvariant();
+            AppLogger.Info("COMMAND_RECEIVED", $"device={DeviceId}; command={cmd.Command}");
+            return HandleCommandAsync(cmd);
         }
 
         // Duoc goi moi khi trang thai ket noi MQTT thay doi (ket noi lan dau, mat ket noi, hoac reconnect thanh cong)
@@ -148,6 +206,12 @@ namespace UDM_21.Simulators
             {
                 Console.WriteLine($"[Device {DeviceId}] Disconnected from Broker.");
             }
+        }
+
+        public async ValueTask DisposeAsync()
+        {
+            await StopAsync();
+            await Mqtt.DisposeAsync();
         }
     }
 }

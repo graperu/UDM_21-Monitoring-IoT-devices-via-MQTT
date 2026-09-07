@@ -9,72 +9,149 @@ using MQTTnet.Protocol;
 
 namespace UDM_21.Shared
 {
-    // =========================================================================
-    // TODO (Thành viên 3): XỬ LÝ MẠNG VÀ GIAO THỨC MQTT
-    // Nhiệm vụ:
-    // 1. Quản lý kết nối, ngắt kết nối với MQTT Broker.
-    // 2. Thiết lập LWT (Last Will and Testament) để thông báo khi thiết bị ngắt kết nối đột ngột.
-    // 3. Đăng ký nhận tin (Subscribe) hỗ trợ Wildcard.
-    // 4. Phát tin (Publish) dữ liệu cảm biến và lệnh điều khiển với QoS phù hợp (QoS 0, QoS 1).
-    // 5. Tự động kết nối lại (auto-reconnect) khi mất kết nối ngoài ý muốn (rớt mạng, Broker sập).
-    // =========================================================================
-    public class MqttHelper
+    public sealed class MqttHelper : IAsyncDisposable
     {
+        private static readonly int[] BackoffDelaysSeconds = { 2, 4, 8, 16, 30 };
+        private static readonly TimeSpan OperationTimeout = TimeSpan.FromSeconds(10);
+
         private readonly IMqttClient _client;
         private readonly MqttFactory _factory;
         private readonly bool _cleanSession;
-        public string ClientId { get; }
+        private readonly ConcurrentDictionary<string, MqttQualityOfServiceLevel> _subscriptions = new();
+        private readonly object _reconnectLock = new();
 
-        // --- Thong tin ket noi duoc luu lai de dung cho viec reconnect ---
         private string _host = "localhost";
         private int _port = 1883;
         private string? _lastWillTopic;
         private string? _lastWillPayload;
-
-        // --- Danh sach topic da subscribe (topic -> QoS), dung de subscribe lai sau reconnect ---
-        private readonly ConcurrentDictionary<string, MqttQualityOfServiceLevel> _subscriptions = new();
-
-        // --- Trang thai cho co che auto-reconnect ---
-        private volatile bool _isManualDisconnect = false;
+        private volatile bool _isManualDisconnect;
+        private volatile bool _isDisposed;
         private CancellationTokenSource? _reconnectCts;
-        private readonly object _reconnectLock = new();
 
-        // Thoi gian cho tang dan giua cac lan thu ket noi lai (giay): 2 -> 4 -> 8 -> 16 -> 30 (roi giu nguyen)
-        private static readonly int[] BackoffDelaysSeconds = { 2, 4, 8, 16, 30 };
+        public string ClientId { get; }
+        public bool IsConnected => _client.IsConnected;
+        public bool IsManualDisconnect => _isManualDisconnect;
 
         public event Func<string, string, MqttQualityOfServiceLevel, bool, Task>? MessageReceivedAsync;
         public event Func<bool, Task>? ConnectionChangedAsync;
-
-        // Su kien moi: bao hieu dang trong qua trinh thu ket noi lai (de UI hien "Dang ket noi lai... lan 3")
         public event Func<int, Task>? ReconnectingAsync;
 
         public MqttHelper(string clientId, bool cleanSession = true)
         {
+            if (string.IsNullOrWhiteSpace(clientId)) throw new ArgumentException("Client ID không được để trống.", nameof(clientId));
+
             ClientId = clientId;
             _cleanSession = cleanSession;
             _factory = new MqttFactory();
             _client = _factory.CreateMqttClient();
- 
-            // Đăng ký sự kiện từ thư viện MQTTnet
             _client.ConnectedAsync += OnConnectedAsync;
             _client.DisconnectedAsync += OnDisconnectedAsync;
             _client.ApplicationMessageReceivedAsync += OnApplicationMessageReceivedAsync;
         }
 
-        // Ham ket noi toi Broker (lan dau tien). Thong so duoc luu lai de tai su dung khi reconnect.
-        public async Task ConnectAsync(string host = "localhost", int port = 1883, string? lastWillTopic = null, string? lastWillPayload = null)
+        public async Task ConnectAsync(
+            string host = "localhost",
+            int port = 1883,
+            string? lastWillTopic = null,
+            string? lastWillPayload = null,
+            CancellationToken cancellationToken = default)
         {
+            ThrowIfDisposed();
+            if (string.IsNullOrWhiteSpace(host)) throw new ArgumentException("Broker host không được để trống.", nameof(host));
+            if (port is < 1 or > 65535) throw new ArgumentOutOfRangeException(nameof(port));
+
             _host = host;
             _port = port;
             _lastWillTopic = lastWillTopic;
             _lastWillPayload = lastWillPayload;
             _isManualDisconnect = false;
 
-            var options = BuildOptions();
-            await _client.ConnectAsync(options);
+            try
+            {
+                await ConnectClientWithTimeoutAsync(cancellationToken);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
+            {
+                AppLogger.Error("MQTT_CONNECT_FAILED", ex);
+                StartReconnectLoop();
+                throw;
+            }
         }
 
-        // Dung chung de tao MqttClientOptions cho ca lan ket noi dau va cac lan reconnect ve sau
+        public async Task DisconnectAsync(CancellationToken cancellationToken = default)
+        {
+            if (_isDisposed) return;
+
+            _isManualDisconnect = true;
+            StopReconnectLoop();
+
+            if (_client.IsConnected)
+            {
+                using var timeout = CreateTimeout(cancellationToken);
+                var options = new MqttClientDisconnectOptionsBuilder().Build();
+                await _client.DisconnectAsync(options, timeout.Token);
+            }
+
+            AppLogger.Info("MQTT_DISCONNECT", $"client={ClientId}; manual=true");
+        }
+
+        public async Task SubscribeAsync(
+            string topic,
+            MqttQualityOfServiceLevel qos = MqttQualityOfServiceLevel.AtLeastOnce,
+            CancellationToken cancellationToken = default)
+        {
+            ThrowIfDisposed();
+            if (string.IsNullOrWhiteSpace(topic)) throw new ArgumentException("Topic không được để trống.", nameof(topic));
+
+            _subscriptions[topic] = qos;
+            if (!_client.IsConnected) return;
+
+            await SubscribeClientAsync(topic, qos, cancellationToken);
+        }
+
+        public async Task PublishAsync(
+            string topic,
+            string payload,
+            MqttQualityOfServiceLevel qos = MqttQualityOfServiceLevel.AtLeastOnce,
+            bool retain = false,
+            CancellationToken cancellationToken = default)
+        {
+            ThrowIfDisposed();
+            if (!_client.IsConnected) throw new InvalidOperationException("MQTT client chưa kết nối.");
+            if (string.IsNullOrWhiteSpace(topic)) throw new ArgumentException("Topic không được để trống.", nameof(topic));
+            if (payload == null) throw new ArgumentNullException(nameof(payload));
+
+            var message = new MqttApplicationMessageBuilder()
+                .WithTopic(topic)
+                .WithPayload(Encoding.UTF8.GetBytes(payload))
+                .WithQualityOfServiceLevel(qos)
+                .WithRetainFlag(retain)
+                .Build();
+
+            using var timeout = CreateTimeout(cancellationToken);
+            await _client.PublishAsync(message, timeout.Token);
+        }
+
+        public async ValueTask DisposeAsync()
+        {
+            if (_isDisposed) return;
+
+            try
+            {
+                await DisconnectAsync();
+            }
+            catch (Exception ex)
+            {
+                AppLogger.Error("MQTT_DISPOSE_DISCONNECT_FAILED", ex);
+            }
+
+            _isDisposed = true;
+            _client.ConnectedAsync -= OnConnectedAsync;
+            _client.DisconnectedAsync -= OnDisconnectedAsync;
+            _client.ApplicationMessageReceivedAsync -= OnApplicationMessageReceivedAsync;
+            _client.Dispose();
+        }
+
         private MqttClientOptions BuildOptions()
         {
             var builder = new MqttClientOptionsBuilder()
@@ -86,164 +163,177 @@ namespace UDM_21.Shared
             if (!string.IsNullOrEmpty(_lastWillTopic) && !string.IsNullOrEmpty(_lastWillPayload))
             {
                 builder.WithWillTopic(_lastWillTopic)
-                       .WithWillPayload(Encoding.UTF8.GetBytes(_lastWillPayload))
-                       .WithWillQualityOfServiceLevel(MqttQualityOfServiceLevel.AtLeastOnce)
-                       .WithWillRetain(true);
+                    .WithWillPayload(Encoding.UTF8.GetBytes(_lastWillPayload))
+                    .WithWillQualityOfServiceLevel(MqttQualityOfServiceLevel.AtLeastOnce)
+                    .WithWillRetain(true);
             }
 
             return builder.Build();
         }
 
-        // Ngat ket noi CHU DONG (vd: tat thiet bi binh thuong). Se KHONG kich hoat auto-reconnect.
-        public async Task DisconnectAsync()
+        private async Task ConnectClientWithTimeoutAsync(CancellationToken cancellationToken)
         {
-            _isManualDisconnect = true;
-            StopReconnectLoop();
-
-            if (_client.IsConnected)
-            {
-                await _client.DisconnectAsync();
-            }
+            using var timeout = CreateTimeout(cancellationToken);
+            await _client.ConnectAsync(BuildOptions(), timeout.Token);
         }
 
-        // Dang ky Topic (Subscribe) - ghi nho lai de tu dong subscribe lai sau khi reconnect
-        public async Task SubscribeAsync(string topic, MqttQualityOfServiceLevel qos = MqttQualityOfServiceLevel.AtLeastOnce)
+        private async Task SubscribeClientAsync(
+            string topic,
+            MqttQualityOfServiceLevel qos,
+            CancellationToken cancellationToken)
         {
-            _subscriptions[topic] = qos;
-
             var options = _factory.CreateSubscribeOptionsBuilder()
-                .WithTopicFilter(f => f.WithTopic(topic).WithQualityOfServiceLevel(qos))
+                .WithTopicFilter(filter => filter.WithTopic(topic).WithQualityOfServiceLevel(qos))
                 .Build();
 
-            await _client.SubscribeAsync(options);
+            using var timeout = CreateTimeout(cancellationToken);
+            await _client.SubscribeAsync(options, timeout.Token);
         }
 
-        // Gui tin (Publish)
-        public async Task PublishAsync(string topic, string payload, MqttQualityOfServiceLevel qos = MqttQualityOfServiceLevel.AtLeastOnce, bool retain = false)
+        private async Task OnConnectedAsync(MqttClientConnectedEventArgs args)
         {
-            var message = new MqttApplicationMessageBuilder()
-                .WithTopic(topic)
-                .WithPayload(Encoding.UTF8.GetBytes(payload))
-                .WithQualityOfServiceLevel(qos)
-                .WithRetainFlag(retain)
-                .Build();
-
-            await _client.PublishAsync(message);
-        }
-
-        private Task OnConnectedAsync(MqttClientConnectedEventArgs args)
-        {
-            // Ket noi (hoac reconnect) thanh cong -> dung vong lap reconnect neu dang chay
             StopReconnectLoop();
-
-            ConnectionChangedAsync?.Invoke(true);
-
-            // Tu dong subscribe lai toan bo topic da dang ky truoc do
-            // (bat buoc voi Clean Session = true, vi Broker se xoa subscription cu khi mat ket noi)
-            _ = ResubscribeAllAsync();
-
-            return Task.CompletedTask;
+            await ResubscribeAllAsync();
+            await InvokeConnectionChangedAsync(true);
+            AppLogger.Info("MQTT_CONNECTED", $"client={ClientId}; endpoint={_host}:{_port}");
         }
 
         private async Task ResubscribeAllAsync()
         {
-            foreach (var kv in _subscriptions)
+            foreach (var subscription in _subscriptions)
             {
                 try
                 {
-                    var options = _factory.CreateSubscribeOptionsBuilder()
-                        .WithTopicFilter(f => f.WithTopic(kv.Key).WithQualityOfServiceLevel(kv.Value))
-                        .Build();
-                    await _client.SubscribeAsync(options);
+                    await SubscribeClientAsync(subscription.Key, subscription.Value, CancellationToken.None);
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"[{ClientId}] Loi khi subscribe lai topic '{kv.Key}': {ex.Message}");
+                    AppLogger.Error("MQTT_RESUBSCRIBE_FAILED", ex);
                 }
             }
         }
 
-        private Task OnDisconnectedAsync(MqttClientDisconnectedEventArgs args)
+        private async Task OnDisconnectedAsync(MqttClientDisconnectedEventArgs args)
         {
-            ConnectionChangedAsync?.Invoke(false);
+            await InvokeConnectionChangedAsync(false);
+            AppLogger.Warning(
+                "MQTT_DISCONNECTED",
+                $"client={ClientId}; manual={_isManualDisconnect}; reason={args.Reason}");
 
-            // Chi tu dong ket noi lai neu day la mat ket noi NGOAI Y MUON (rot mang, broker sap).
-            // Neu la ngat ket noi CHU DONG (goi DisconnectAsync()) thi khong lam gi ca.
-            if (!_isManualDisconnect)
+            if (!_isManualDisconnect && !_isDisposed)
             {
                 StartReconnectLoop();
             }
-
-            return Task.CompletedTask;
         }
 
         private void StartReconnectLoop()
         {
             lock (_reconnectLock)
             {
-                if (_reconnectCts != null) return; // da co vong lap dang chay, khong tao them
+                if (_reconnectCts != null || _isManualDisconnect || _isDisposed) return;
+
                 _reconnectCts = new CancellationTokenSource();
-                _ = ReconnectLoopAsync(_reconnectCts.Token);
+                _ = ReconnectLoopAsync(_reconnectCts);
             }
         }
 
         private void StopReconnectLoop()
         {
+            CancellationTokenSource? reconnectCts;
             lock (_reconnectLock)
             {
-                _reconnectCts?.Cancel();
+                reconnectCts = _reconnectCts;
                 _reconnectCts = null;
             }
+
+            reconnectCts?.Cancel();
         }
 
-        // Vong lap thu ket noi lai voi exponential backoff: 2s -> 4s -> 8s -> 16s -> 30s (roi giu nguyen 30s)
-        private async Task ReconnectLoopAsync(CancellationToken token)
+        private async Task ReconnectLoopAsync(CancellationTokenSource owner)
         {
-            int attempt = 0;
-
-            while (!token.IsCancellationRequested)
+            var attempt = 0;
+            try
             {
-                attempt++;
-                int delaySeconds = BackoffDelaysSeconds[Math.Min(attempt - 1, BackoffDelaysSeconds.Length - 1)];
-
-                Console.WriteLine($"[{ClientId}] Mat ket noi Broker. Se thu ket noi lai lan {attempt} sau {delaySeconds}s...");
-
-                try
+                while (!owner.IsCancellationRequested && !_isManualDisconnect && !_isDisposed)
                 {
-                    ReconnectingAsync?.Invoke(attempt);
-                    await Task.Delay(TimeSpan.FromSeconds(delaySeconds), token);
+                    attempt++;
+                    var delaySeconds = BackoffDelaysSeconds[Math.Min(attempt - 1, BackoffDelaysSeconds.Length - 1)];
+                    await InvokeReconnectingAsync(attempt);
+
+                    try
+                    {
+                        await Task.Delay(TimeSpan.FromSeconds(delaySeconds), owner.Token);
+                        await ConnectClientWithTimeoutAsync(owner.Token);
+                    }
+                    catch (OperationCanceledException) when (owner.IsCancellationRequested)
+                    {
+                        break;
+                    }
+                    catch (Exception ex)
+                    {
+                        AppLogger.Error("MQTT_RECONNECT_FAILED", ex);
+                    }
                 }
-                catch (TaskCanceledException)
+            }
+            finally
+            {
+                lock (_reconnectLock)
                 {
-                    break; // vong lap bi huy (do reconnect thanh cong hoac ngat thu cong)
+                    if (ReferenceEquals(_reconnectCts, owner)) _reconnectCts = null;
                 }
 
-                if (token.IsCancellationRequested) break;
-
-                try
-                {
-                    var options = BuildOptions();
-                    await _client.ConnectAsync(options);
-                    // Neu thanh cong, OnConnectedAsync se duoc MQTTnet tu goi,
-                    // trong do se goi StopReconnectLoop() de dung vong lap nay.
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"[{ClientId}] Ket noi lai lan {attempt} that bai: {ex.Message}");
-                    // Khong break - vong lap while se tu dong thu lai o lan tiep theo
-                }
+                owner.Dispose();
             }
         }
 
-        private Task OnApplicationMessageReceivedAsync(MqttApplicationMessageReceivedEventArgs args)
+        private async Task OnApplicationMessageReceivedAsync(MqttApplicationMessageReceivedEventArgs args)
         {
+            var handler = MessageReceivedAsync;
+            if (handler == null) return;
+
             var topic = args.ApplicationMessage.Topic;
             var payload = Encoding.UTF8.GetString(args.ApplicationMessage.PayloadSegment);
             var qos = args.ApplicationMessage.QualityOfServiceLevel;
             var retain = args.ApplicationMessage.Retain;
 
-            MessageReceivedAsync?.Invoke(topic, payload, qos, retain);
-            return Task.CompletedTask;
+            foreach (Func<string, string, MqttQualityOfServiceLevel, bool, Task> subscriber in handler.GetInvocationList())
+            {
+                await subscriber(topic, payload, qos, retain);
+            }
+        }
+
+        private async Task InvokeConnectionChangedAsync(bool isConnected)
+        {
+            var handler = ConnectionChangedAsync;
+            if (handler == null) return;
+
+            foreach (Func<bool, Task> subscriber in handler.GetInvocationList())
+            {
+                await subscriber(isConnected);
+            }
+        }
+
+        private async Task InvokeReconnectingAsync(int attempt)
+        {
+            var handler = ReconnectingAsync;
+            if (handler == null) return;
+
+            foreach (Func<int, Task> subscriber in handler.GetInvocationList())
+            {
+                await subscriber(attempt);
+            }
+        }
+
+        private static CancellationTokenSource CreateTimeout(CancellationToken cancellationToken)
+        {
+            var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeout.CancelAfter(OperationTimeout);
+            return timeout;
+        }
+
+        private void ThrowIfDisposed()
+        {
+            if (_isDisposed) throw new ObjectDisposedException(nameof(MqttHelper));
         }
     }
 }

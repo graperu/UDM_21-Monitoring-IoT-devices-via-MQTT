@@ -29,6 +29,11 @@ Thumbs.db
 *.db
 Extra/logs/*.log
 
+## Python cache
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
 ## Config secrets
 Code/config.json
 !Code/config.example.json

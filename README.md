@@ -27,7 +27,7 @@
 | STT | Họ và Tên | MSSV | Vai Trò / Trách Nhiệm Chi Tiết | Thư Mục / File Đảm Nhận | Mức Độ Hoàn Thành |
 |:---:|:---|:---:|:---|:---|:---:|
 | **1** | **Vũ Ngọc Cát Chương** | `056206003708` | **Thiết kế & Lập trình Giao diện (WPF GUI):** Xây dựng `MainWindow.xaml`, `App.xaml`, thiết kế bố cục DataGrid, Box gửi lệnh điều khiển, Log Console tùy biến thanh cuộn, cửa sổ hiển thị lịch sử 20 bản tin đo gần nhất (`TelemetryHistoryWindow.xaml`). | `Code/Dashboard/MainWindow.xaml`<br>`Code/Dashboard/App.xaml`<br>`Code/Dashboard/TelemetryHistoryWindow.xaml` | **100% (Hoàn thành)** |
-| **2** | **Huỳnh Nữ Huyền Trâm** | `051305001244` | **Lập trình Logic Dashboard & Controller:** Viết `MqttController.cs`, xử lý `Dispatcher.Invoke` chống treo GUI khi cập nhật dữ liệu dồn dập từ luồng nền, triển khai `INotifyPropertyChanged` trong `DeviceItem.cs`, xử lý sự kiện gửi lệnh và tích hợp `TelemetryHistoryManager`. | `Code/Dashboard/Controllers/`<br>`Code/Dashboard/Models/`<br>`Code/Dashboard/MainWindow.xaml.cs` | **100% (Hoàn thành)** |
+| **2** | **Huỳnh Nữ Huyền Trâm** | `051305001244` | **Lập trình Logic Dashboard & Controller:** Viết `MqttController.cs`, xử lý `Dispatcher.BeginInvoke` để cập nhật UI bất đồng bộ, triển khai `INotifyPropertyChanged` trong `DeviceItem.cs`, xử lý sự kiện gửi lệnh và tích hợp `TelemetryHistoryManager`. | `Code/Dashboard/Controllers/`<br>`Code/Dashboard/Models/`<br>`Code/Dashboard/MainWindow.xaml.cs` | **100% (Hoàn thành)** |
 | **3** | **Phan Văn Đỉnh** | `054205003603` | **Trưởng nhóm - Lập trình Thiết bị Giả lập IoT:** Xây dựng `DeviceBase.cs` đa luồng (`Task.Delay` + `CancellationToken`), lập trình 5 thiết bị giả lập cảm biến độc lập, cấu hình LWT Online/Offline, chuẩn hóa `message_id` GUID và `timestamp` ISO-8601 UTC. | `Code/Simulators/DeviceBase.cs`<br>`Code/Simulators/Devices/`<br>`Code/Simulators/Program.cs` | **100% (Hoàn thành)** |
 | **4** | **Huỳnh Gia Hợp** | `054205008367` | **Giao thức Mạng Cốt lõi & Reliability:** Xây dựng `MqttHelper.cs` (Wrapper MQTTnet v4), cấu hình QoS 0/1, Auto-reconnect Exponential Backoff (2s → 30s), định nghĩa JSON Data Contract trong `Protocol.cs`, cài đặt bộ lọc Message Trùng (Deduplication) và Đến Trễ (Out-of-order). | `Code/Shared/MqttHelper.cs`<br>`Code/Shared/Protocol.cs`<br>`Code/Shared/Shared.csproj` | **100% (Hoàn thành)** |
 | **5** | **Lưu Đình Thuận** | `075205010434` | **Kiểm Thử, Đo Đạc Hiệu Năng & Báo Cáo:** Xây dựng `stress_test.py` và `test_runner.py`, đo đạc Throughput và Latency ở 2 mức tải (500 msgs và 2.000 msgs), tổng hợp dữ liệu kiểm thử, biên soạn tài liệu Báo cáo Word (`DOCX/`) và Slide bảo vệ (`PPTX/`). | `Extra/scripts/`<br>`Extra/test_results/`<br>`DOCX/`<br>`PPTX/` | **100% (Hoàn thành)** |
@@ -161,7 +161,7 @@ Quy tắc phân cấp: `iot/{location}/{device_type}/{device_id}/{action_or_type
 ## 🛡️ 6. Xử Lý Lỗi, Độ Tin Cậy & Bảo Mật
 
 1. **Chống treo giao diện người dùng (WPF UI Thread Safety):**
-   * Mọi sự kiện nhận tin từ luồng nền MQTTnet đều được đồng bộ vào UI Thread thông qua `Dispatcher.Invoke`, đảm bảo giao diện luôn mượt mà khi nhận dữ liệu với tần suất cao.
+   * Mọi sự kiện nhận tin từ luồng nền MQTTnet đều được đưa bất đồng bộ vào UI Thread thông qua `Dispatcher.BeginInvoke`, tránh chặn luồng nhận MQTT khi GUI đang bận.
 2. **Bộ lọc Message Trùng (Deduplication):**
    * Sử dụng `HashSet<string>` kết hợp `Queue<string>` lưu trữ 100 `message_id` gần nhất trong bộ nhớ. Bỏ qua các bản tin trùng lặp do cơ chế truyền lại của QoS 1.
 3. **Bộ lọc Message Đến Trễ (Out-of-order Message Filtering):**
@@ -269,7 +269,13 @@ dotnet run --project Code/Dashboard/Dashboard.csproj
 
 ## 📊 9. Kết Quả Kiểm Thử Chức Năng & Stress Test Hiệu Năng
 
-Hệ thống đã được kiểm thử tự động toàn diện thông qua script `Extra/scripts/test_runner.py` kết nối trực tiếp với Public Broker `broker.emqx.io:1883`:
+Hệ thống có script end-to-end `Extra/scripts/test_runner.py` kết nối trực tiếp với Public Broker `broker.emqx.io:1883`.
+
+Ngoài ra, solution có project `Code/Tests` với **13 test tự động**. Các integration test dựng MQTT broker cục bộ bằng MQTTnet để kiểm tra dữ liệu sai, message trùng, message đến trễ, LWT khi client mất đột ngột, phát hiện broker ngắt và tự động reconnect/re-subscribe:
+
+```bash
+dotnet test Code/UDM_21.sln
+```
 
 ### 9.1. Bảng Tổng Hợp Kiểm Thử Chức Năng (Functional Test)
 
@@ -279,16 +285,18 @@ Hệ thống đã được kiểm thử tự động toàn diện thông qua scr
 | **TC-02** | **Chuẩn hóa JSON Protocol** | Mỗi bản tin dữ liệu cảm biến phải có `message_id` (GUID duy nhất) và `timestamp` (UTC ISO-8601). | 100% bản tin nhận về đều có GUID hợp lệ và thời gian UTC chuẩn xác. | **✅ PASS** |
 | **TC-03** | **Phát Lệnh & Phản Hồi Real-time** | Gửi lệnh `TOGGLE_POWER` (`state: ON`) tới đèn thông minh `smart_light_01`. | Thiết bị `smart_light_01` nhận lệnh, đổi trạng thái sang `ON`, công suất `12W` và phát ngay Telemetry phản hồi tức thì. | **✅ PASS** |
 | **TC-04** | **Cảnh Báo Vượt Ngưỡng** | `temp_hum_01` định kỳ phát giá trị nhiệt độ đột biến > 40°C để kích hoạt cảnh báo. | Bắt thành công **2 lần** nhiệt độ cao bất thường ($52.14^\circ\text{C}$ và $51.89^\circ\text{C}$) kích hoạt đèn cảnh báo đỏ cam. | **✅ PASS** |
-| **TC-05** | **Stress Test 2 Mức Tải (QoS 1)** | Gửi 500 msgs (Tải nhẹ) & 2.000 msgs (Tải nặng) đo Throughput và Latency. | Tỷ lệ xác nhận gói tin (PUBACK) đạt **100.0%** (không rớt gói nào). | **✅ PASS** |
+| **TC-05** | **Stress Test 2 Mức Tải (QoS 1)** | Gửi 500 msgs (Tải nhẹ) & 2.000 msgs (Tải nặng), đo throughput và RTT PUBACK của từng message. | Tỷ lệ xác nhận gói tin đạt **100.0%**; test tự đánh dấu FAIL nếu thiếu ACK hoặc timeout. | **✅ PASS** |
 
 ---
 
 ### 9.2. Đo Đạc Hiệu Năng & Thông Lượng (Performance Benchmark)
 
-| Mức Tải | Số Lượng Message | QoS Level | Tỷ Lệ Nhận Thành Công (ACK) | Tổng Thời Gian | Thông Lượng (Throughput) | Độ Trễ TB (Latency) |
-|:---|:---:|:---:|:---:|:---:|:---:|:---:|
-| **Mức 1 (Tải nhẹ)** | 500 msgs | QoS 1 | **100.0% (500/500)** | 8.03 s | **62.30 msg/giây** | **16.05 ms/msg** |
-| **Mức 2 (Tải nặng)** | 2.000 msgs | QoS 1 | **100.0% (2.000/2.000)** | 15.03 s | **62.28 msg/giây** | **7.51 ms/msg** |
+| Mức Tải | Số Lượng Message | QoS | Tỷ Lệ ACK | Tổng Thời Gian | Throughput | RTT trung bình | RTT P95 |
+|:---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| **Mức 1 (Tải nhẹ)** | 500 | 1 | **100% (500/500)** | 6.29 s | **79.46 msg/s** | **3,219.04 ms** | **5,898.41 ms** |
+| **Mức 2 (Tải nặng)** | 2.000 | 1 | **100% (2000/2000)** | 26.02 s | **76.88 msg/s** | **12,953.73 ms** | **24,512.80 ms** |
+
+Kết quả trên được đo ngày 06/09/2026 qua public broker. RTT cao ở mức tải nặng phản ánh cả thời gian chờ trong hàng đợi QoS 1, không phải chỉ độ trễ đường truyền. Cấu hình máy, phiên bản runtime, phương pháp đo và dữ liệu gốc nằm trong `Extra/test_results/stress_report.json`.
 
 ---
 

@@ -1,14 +1,17 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Media;
 using Newtonsoft.Json;
 using UDM_21.Dashboard.Controllers;
 using UDM_21.Dashboard.Models;
 using UDM_21.Dashboard.Services;
+using UDM_21.Shared;
 
 namespace UDM_21.Dashboard
 {
@@ -20,6 +23,7 @@ namespace UDM_21.Dashboard
         private readonly ObservableCollection<string> _logMessages =
             new ObservableCollection<string>();
         private readonly TelemetryHistoryManager _historyManager;
+        private bool _allowClose;
 
         private const int MaxLogLines = 200;
 
@@ -40,8 +44,10 @@ namespace UDM_21.Dashboard
             _mqttController.ConnectionStatusChanged += OnConnectionStatusChanged;
             _mqttController.TelemetryReceived += OnTelemetryReceived;
             _mqttController.DeviceStatusReceived += OnDeviceStatusReceived;
+            _mqttController.MessageRejected += OnMessageRejected;
 
             Loaded += MainWindow_Loaded;
+            Closing += MainWindow_Closing;
         }
 
         private void MainWindow_Loaded(object sender, RoutedEventArgs e)
@@ -53,28 +59,56 @@ namespace UDM_21.Dashboard
         {
             string host = TxtHost.Text.Trim();
 
-            if (int.TryParse(TxtPort.Text.Trim(), out int port))
+            if (string.IsNullOrWhiteSpace(host))
+            {
+                ShowError("Broker host không được để trống.");
+                return;
+            }
+
+            if (!int.TryParse(TxtPort.Text.Trim(), out int port) || port is < 1 or > 65535)
+            {
+                ShowError("Port phải là số trong khoảng 1..65535.");
+                return;
+            }
+
+            BtnConnect.IsEnabled = false;
+            try
             {
                 await _mqttController.ConnectAsync(host, port);
             }
-            else
+            catch (OperationCanceledException)
             {
-                MessageBox.Show(
-                    "Port không hợp lệ!",
-                    "Lỗi",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Error);
+                ShowError("Kết nối MQTT quá thời gian chờ 10 giây.");
+            }
+            catch (Exception ex)
+            {
+                AppLogger.Error("DASHBOARD_CONNECT_FAILED", ex);
+                ShowError($"Không thể kết nối MQTT Broker: {ex.Message}");
+                BtnConnect.IsEnabled = true;
             }
         }
 
         private async void BtnDisconnect_Click(object sender, RoutedEventArgs e)
         {
-            await _mqttController.DisconnectAsync();
+            BtnDisconnect.IsEnabled = false;
+            try
+            {
+                await _mqttController.DisconnectAsync();
+            }
+            catch (OperationCanceledException)
+            {
+                ShowError("Ngắt kết nối MQTT quá thời gian chờ.");
+            }
+            catch (Exception ex)
+            {
+                AppLogger.Error("DASHBOARD_DISCONNECT_FAILED", ex);
+                ShowError($"Không thể ngắt kết nối an toàn: {ex.Message}");
+            }
         }
 
         private void OnConnectionStatusChanged(bool isConnected, string message)
         {
-            Dispatcher.Invoke(() =>
+            Dispatcher.BeginInvoke(() =>
             {
                 LblStatus.Text = $"Trạng thái: {message}";
 
@@ -83,6 +117,7 @@ namespace UDM_21.Dashboard
                     LblStatus.Foreground = Brushes.Green;
                     BtnConnect.IsEnabled = false;
                     BtnDisconnect.IsEnabled = true;
+                    BtnSendCmd.IsEnabled = true;
                     LogConsole($"[SYSTEM] {message}");
                 }
                 else
@@ -90,6 +125,7 @@ namespace UDM_21.Dashboard
                     LblStatus.Foreground = Brushes.Red;
                     BtnConnect.IsEnabled = true;
                     BtnDisconnect.IsEnabled = false;
+                    BtnSendCmd.IsEnabled = false;
                     LogConsole($"[SYSTEM] {message}");
                 }
             });
@@ -97,7 +133,7 @@ namespace UDM_21.Dashboard
 
         private void OnTelemetryReceived(Shared.TelemetryMessage msg)
         {
-            Dispatcher.Invoke(() =>
+            Dispatcher.BeginInvoke(() =>
             {
                 var dev = _devices.FirstOrDefault(
                     d => d.DeviceId == msg.DeviceId);
@@ -115,6 +151,9 @@ namespace UDM_21.Dashboard
                     _devices.Add(dev);
                 }
 
+                // Retained status có thể đến trước telemetry và tạo DeviceItem chưa đủ metadata.
+                dev.DeviceType = msg.DeviceType;
+                dev.Location = msg.Location;
                 dev.IsOnline = true;
                 dev.LastSeen = DateTime.Now.ToString("T");
                 dev.RawTelemetryData = msg.Data;
@@ -162,13 +201,18 @@ namespace UDM_21.Dashboard
                 LogConsole(
                     $"[HISTORY] {msg.DeviceId}: " +
                     $"Đã lưu {history.Count}/20 dữ liệu gần nhất");
+
+                if (DgDevices.SelectedItem is DeviceItem selected && selected.DeviceId == msg.DeviceId)
+                {
+                    DgHistory.ItemsSource = history;
+                }
             });
         }
 
         private void OnDeviceStatusReceived(
             Shared.DeviceStatusMessage statusMsg)
         {
-            Dispatcher.Invoke(() =>
+            Dispatcher.BeginInvoke(() =>
             {
                 var dev = _devices.FirstOrDefault(
                     d => d.DeviceId == statusMsg.DeviceId);
@@ -196,6 +240,11 @@ namespace UDM_21.Dashboard
                     $"[STATUS] Device {statusMsg.DeviceId} " +
                     $"is {statusMsg.Status.ToUpper()}");
             });
+        }
+
+        private void OnMessageRejected(string reason)
+        {
+            Dispatcher.BeginInvoke(() => LogConsole($"[MESSAGE REJECTED] {reason}"));
         }
 
         // =========================================================================
@@ -240,7 +289,15 @@ namespace UDM_21.Dashboard
             }
 
             string cmd = TxtCommand.Text.Trim();
+            if (string.IsNullOrWhiteSpace(cmd))
+            {
+                ShowError("Tên lệnh không được để trống.");
+                return;
+            }
 
+            BtnSendCmd.IsEnabled = false;
+            LblCommandStatus.Text = "Đang gửi lệnh...";
+            LblCommandStatus.Foreground = Brushes.DarkOrange;
             try
             {
                 var paramsDict =
@@ -259,20 +316,25 @@ namespace UDM_21.Dashboard
                 LogConsole(
                     $"[COMMAND SENT] To " +
                     $"{selectedDev.DeviceId}: {cmd}");
+                LblCommandStatus.Text = $"Gửi thành công tới {selectedDev.DeviceId}.";
+                LblCommandStatus.Foreground = Brushes.Green;
             }
             catch (Exception ex)
             {
-                MessageBox.Show(
-                    $"Cú pháp JSON không hợp lệ: {ex.Message}",
-                    "Lỗi",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Error);
+                AppLogger.Error("DASHBOARD_COMMAND_FAILED", ex);
+                LblCommandStatus.Text = $"Gửi thất bại: {ex.Message}";
+                LblCommandStatus.Foreground = Brushes.Red;
+                ShowError($"Không thể gửi lệnh: {ex.Message}");
+            }
+            finally
+            {
+                BtnSendCmd.IsEnabled = BtnDisconnect.IsEnabled;
             }
         }
 
         private void LogConsole(string message)
         {
-            Dispatcher.Invoke(() =>
+            Dispatcher.BeginInvoke(() =>
             {
                 string formattedMessage =
                     $"[{DateTime.Now:HH:mm:ss}] {message}";
@@ -291,6 +353,48 @@ namespace UDM_21.Dashboard
                             LbConsole.Items.Count - 1]);
                 }
             });
+
+            AppLogger.Info("DASHBOARD_EVENT", message);
+        }
+
+        private void DgDevices_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+        {
+            if (DgDevices.SelectedItem is not DeviceItem device) return;
+
+            var historyWindow = new TelemetryHistoryWindow(device.DeviceId, _historyManager)
+            {
+                Owner = this
+            };
+            historyWindow.ShowDialog();
+            DgHistory.ItemsSource = _historyManager.GetHistory(device.DeviceId);
+        }
+
+        private async void MainWindow_Closing(object? sender, CancelEventArgs e)
+        {
+            if (_allowClose) return;
+
+            e.Cancel = true;
+            IsEnabled = false;
+            LblStatus.Text = "Trạng thái: Đang đóng kết nối và giải phóng tài nguyên...";
+
+            try
+            {
+                await _mqttController.DisposeAsync();
+            }
+            catch (Exception ex)
+            {
+                AppLogger.Error("DASHBOARD_SHUTDOWN_FAILED", ex);
+            }
+            finally
+            {
+                _allowClose = true;
+                Close();
+            }
+        }
+
+        private static void ShowError(string message)
+        {
+            MessageBox.Show(message, "Lỗi", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
 }

@@ -4,10 +4,6 @@ using Newtonsoft.Json;
 
 namespace UDM_21.Shared
 {
-    // =========================================================================
-    // TODO (Thành viên 3): ĐIỀU CHỈNH CẤU TRÚC MESSAGE VÀ JSON PROTOCOL
-    // =========================================================================
-
     /// <summary>
     /// Thông điệp dữ liệu cảm biến (Telemetry) thiết bị gửi về Broker
     /// Topic: iot/{location}/{device_type}/{device_id}/telemetry
@@ -45,7 +41,9 @@ namespace UDM_21.Shared
 
         public static TelemetryMessage? FromJson(string json)
         {
-            return JsonConvert.DeserializeObject<TelemetryMessage>(json);
+            return MessageValidator.TryParseTelemetry(json, out var message, out _)
+                ? message
+                : null;
         }
     }
 
@@ -68,7 +66,8 @@ namespace UDM_21.Shared
         public string Timestamp { get; set; } = DateTime.UtcNow.ToString("o");
 
         public string ToJson() => JsonConvert.SerializeObject(this);
-        public static DeviceStatusMessage? FromJson(string json) => JsonConvert.DeserializeObject<DeviceStatusMessage>(json);
+        public static DeviceStatusMessage? FromJson(string json) =>
+            MessageValidator.TryParseStatus(json, out var message, out _) ? message : null;
     }
 
     /// <summary>
@@ -90,6 +89,7 @@ namespace UDM_21.Shared
         public Dictionary<string, object> Params { get; set; } = new Dictionary<string, object>();
 
         public string ToJson() => JsonConvert.SerializeObject(this);
-        public static CommandMessage? FromJson(string json) => JsonConvert.DeserializeObject<CommandMessage>(json);
+        public static CommandMessage? FromJson(string json) =>
+            MessageValidator.TryParseCommand(json, out var message, out _) ? message : null;
     }
 }

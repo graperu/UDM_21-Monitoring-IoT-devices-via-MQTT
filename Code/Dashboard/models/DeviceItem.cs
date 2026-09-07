@@ -13,10 +13,27 @@ namespace UDM_21.Dashboard.Models
 
         private bool _hasWarning;
         private string _warningMessage = string.Empty;
+        private string _deviceId = string.Empty;
+        private string _location = string.Empty;
+        private string _deviceType = string.Empty;
 
-        public string DeviceId { get; set; } = string.Empty;
-        public string Location { get; set; } = string.Empty;
-        public string DeviceType { get; set; } = string.Empty;
+        public string DeviceId
+        {
+            get => _deviceId;
+            set { _deviceId = value; OnPropertyChanged(); }
+        }
+
+        public string Location
+        {
+            get => _location;
+            set { _location = value; OnPropertyChanged(); }
+        }
+
+        public string DeviceType
+        {
+            get => _deviceType;
+            set { _deviceType = value; OnPropertyChanged(); }
+        }
 
         public bool IsOnline
         {

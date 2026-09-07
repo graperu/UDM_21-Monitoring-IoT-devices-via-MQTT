@@ -1,0 +1,44 @@
+{
+  "timestamp": "2026-09-06 17:15:33",
+  "broker": "broker.emqx.io:1883",
+  "environment": {
+    "machine": "graperu",
+    "os": "Windows-11-10.0.26200-SP0",
+    "processor": "Intel64 Family 6 Model 141 Stepping 1, GenuineIntel",
+    "logical_cpu_count": 12,
+    "total_memory_mb": 16122,
+    "python_version": "3.14.0",
+    "dotnet_sdk_version": "10.0.100",
+    "paho_mqtt_version": "2.1.0"
+  },
+  "method": {
+    "latency": "RTT từ lúc publish() đến callback PUBACK cho từng message",
+    "throughput": "Số PUBACK nhận được chia cho tổng thời gian test",
+    "pass_condition": "Nhận đủ PUBACK trước timeout hữu hạn tăng theo mức tải (tối đa 60 giây)"
+  },
+  "results": {
+    "Muc_1_Tai_Nhe_500_msgs": {
+      "total_sent": 500,
+      "acked_count": 500,
+      "duration_sec": 6.293,
+      "throughput_msg_sec": 79.46,
+      "avg_latency_ms": 3219.04,
+      "p95_latency_ms": 5898.41,
+      "success_rate_pct": 100.0,
+      "timeout_sec": 15,
+      "passed": true
+    },
+    "Muc_2_Tai_Nang_2000_msgs": {
+      "total_sent": 2000,
+      "acked_count": 2000,
+      "duration_sec": 26.016,
+      "throughput_msg_sec": 76.88,
+      "avg_latency_ms": 12953.73,
+      "p95_latency_ms": 24512.8,
+      "success_rate_pct": 100.0,
+      "timeout_sec": 50.0,
+      "passed": true
+    }
+  },
+  "passed": true
+}
