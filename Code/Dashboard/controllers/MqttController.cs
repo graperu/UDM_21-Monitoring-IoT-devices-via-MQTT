@@ -96,6 +96,13 @@ namespace UDM_21.Dashboard.Controllers
 
                 if (msg != null)
                 {
+                    if (string.IsNullOrWhiteSpace(msg.MessageId))
+                        {
+                            Console.WriteLine(
+                                "[MQTT] Invalid message: missing message_id");
+
+                            return Task.CompletedTask;
+                        }
                     // =====================
                     // DEDUPLICATION
                     // =====================

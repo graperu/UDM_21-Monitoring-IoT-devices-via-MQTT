@@ -14,6 +14,8 @@ namespace UDM_21.Shared
     /// </summary>
     public class TelemetryMessage
     {
+        [JsonProperty("message_id")]
+        public string MessageId { get; set; } = Guid.NewGuid().ToString();
         [JsonProperty("device_id")]
         public string DeviceId { get; set; } = string.Empty;
 
