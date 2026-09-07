@@ -33,7 +33,7 @@ public class MessageValidationTests
         var message = ValidTelemetry();
 
         var accepted = MessageValidator.ValidateTopic(
-            "iot/lab/sensor/another_device/telemetry",
+            "udm21_nhom01/lab/sensor/another_device/telemetry",
             "telemetry",
             message.DeviceId,
             message.DeviceType,

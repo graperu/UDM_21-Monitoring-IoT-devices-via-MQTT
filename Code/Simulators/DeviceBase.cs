@@ -12,10 +12,11 @@ namespace UDM_21.Simulators
         public string DeviceType { get; }
         public string Location { get; }
         public int PublishIntervalSeconds { get; }
+        public string TopicRoot { get; }
 
-        protected string TelemetryTopic => $"iot/{Location}/{DeviceType}/{DeviceId}/telemetry";
-        protected string StatusTopic => $"iot/{Location}/{DeviceType}/{DeviceId}/status";
-        protected string CmdTopic => $"iot/{Location}/{DeviceType}/{DeviceId}/cmd";
+        protected string TelemetryTopic => MqttTopics.Telemetry(TopicRoot, Location, DeviceType, DeviceId);
+        protected string StatusTopic => MqttTopics.Status(TopicRoot, Location, DeviceType, DeviceId);
+        protected string CmdTopic => MqttTopics.Command(TopicRoot, Location, DeviceType, DeviceId);
 
         protected readonly MqttHelper Mqtt;
         private CancellationTokenSource? _cts;
@@ -23,12 +24,18 @@ namespace UDM_21.Simulators
         private bool _stopped;
         private readonly MessageDeduplicator _processedCommandIds = new MessageDeduplicator(100);
 
-        protected DeviceBase(string deviceId, string deviceType, string location, int publishIntervalSeconds = 3)
+        protected DeviceBase(
+            string deviceId,
+            string deviceType,
+            string location,
+            int publishIntervalSeconds = 3,
+            string topicRoot = MqttTopics.DefaultRoot)
         {
             DeviceId = deviceId;
             DeviceType = deviceType;
             Location = location;
             PublishIntervalSeconds = publishIntervalSeconds;
+            TopicRoot = MqttTopics.NormalizeRoot(topicRoot);
 
             Mqtt = new MqttHelper($"sim_{DeviceId}_{Guid.NewGuid().ToString("N").Substring(0, 4)}");
             Mqtt.MessageReceivedAsync += OnMessageReceivedAsync;
@@ -40,7 +47,14 @@ namespace UDM_21.Simulators
 
         public async Task StartAsync(string brokerHost = "broker.emqx.io", int brokerPort = 1883)
         {
+            await StartAsync(new MqttConnectionSettings { Host = brokerHost, Port = brokerPort });
+        }
+
+        public async Task StartAsync(MqttConnectionSettings settings)
+        {
             if (_cts != null) throw new InvalidOperationException($"Device {DeviceId} đã được khởi động.");
+            ArgumentNullException.ThrowIfNull(settings);
+            settings.Validate();
             _cts = new CancellationTokenSource();
             _stopped = false;
 
@@ -56,13 +70,13 @@ namespace UDM_21.Simulators
             {
                 // Đăng ký trước để subscription được ghi nhớ cả khi lần kết nối đầu thất bại.
                 await Mqtt.SubscribeAsync(CmdTopic);
-                await Mqtt.ConnectAsync(brokerHost, brokerPort, StatusTopic, lwtStatus.ToJson());
+                await Mqtt.ConnectAsync(settings, StatusTopic, lwtStatus.ToJson());
                 Console.WriteLine($"[Device {DeviceId}] Online and active.");
-                AppLogger.Info("DEVICE_STARTED", $"device={DeviceId}; endpoint={brokerHost}:{brokerPort}");
+                AppLogger.Info("DEVICE_STARTED", $"device={DeviceId}; endpoint={settings.Host}:{settings.Port}; tls={settings.UseTls}");
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[Device {DeviceId}] Unreachable broker '{brokerHost}:{brokerPort}' ({ex.Message}). Auto-reconnect active...");
+                Console.WriteLine($"[Device {DeviceId}] Unreachable broker '{settings.Host}:{settings.Port}' ({ex.Message}). Auto-reconnect active...");
                 AppLogger.Error("DEVICE_CONNECT_FAILED", ex);
             }
 

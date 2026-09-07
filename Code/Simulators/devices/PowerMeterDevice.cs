@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using UDM_21.Shared;
 
 namespace UDM_21.Simulators.Devices
 {
@@ -10,8 +11,8 @@ namespace UDM_21.Simulators.Devices
         private double _current = 4.5;
         private double _totalKwh = 120.0;
 
-        public PowerMeterDevice(string deviceId, string location, int interval = 2)
-            : base(deviceId, "meter", location, interval) { }
+        public PowerMeterDevice(string deviceId, string location, int interval = 2, string topicRoot = MqttTopics.DefaultRoot)
+            : base(deviceId, "meter", location, interval, topicRoot) { }
 
         protected override Dictionary<string, object> GenerateTelemetry()
         {

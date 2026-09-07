@@ -169,12 +169,24 @@ namespace UDM_21.Shared
             string? deviceId,
             string? deviceType,
             string? location,
-            out string error)
+            out string error,
+            string topicRoot = MqttTopics.DefaultRoot)
         {
-            var parts = topic?.Split('/') ?? Array.Empty<string>();
-            if (parts.Length != 5 || parts[0] != "iot" || parts[4] != expectedKind)
+            string normalizedRoot;
+            try
             {
-                error = $"Topic không đúng mẫu iot/{{location}}/{{device_type}}/{{device_id}}/{expectedKind}.";
+                normalizedRoot = MqttTopics.NormalizeRoot(topicRoot);
+            }
+            catch (ArgumentException ex)
+            {
+                error = ex.Message;
+                return false;
+            }
+
+            var parts = topic?.Split('/') ?? Array.Empty<string>();
+            if (parts.Length != 5 || parts[0] != normalizedRoot || parts[4] != expectedKind)
+            {
+                error = $"Topic không đúng mẫu {normalizedRoot}/{{location}}/{{device_type}}/{{device_id}}/{expectedKind}.";
                 return false;
             }
 

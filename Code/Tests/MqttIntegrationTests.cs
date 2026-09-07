@@ -11,6 +11,33 @@ namespace UDM_21.Tests;
 
 public class MqttIntegrationTests
 {
+    [Fact(Timeout = 15000)]
+    public async Task BrokerAuthenticationAcceptsValidCredentialsAndRejectsInvalidCredentials()
+    {
+        await using var broker = await EmbeddedBroker.StartAsync();
+        broker.RequireCredentials("demo-user", "demo-password");
+
+        await using var validClient = new MqttHelper($"auth_valid_{Guid.NewGuid():N}");
+        await validClient.ConnectAsync(new MqttConnectionSettings
+        {
+            Host = IPAddress.Loopback.ToString(),
+            Port = broker.Port,
+            Username = "demo-user",
+            Password = "demo-password"
+        });
+        Assert.True(validClient.IsConnected);
+
+        await using var invalidClient = new MqttHelper($"auth_invalid_{Guid.NewGuid():N}");
+        await Assert.ThrowsAnyAsync<Exception>(() => invalidClient.ConnectAsync(new MqttConnectionSettings
+        {
+            Host = IPAddress.Loopback.ToString(),
+            Port = broker.Port,
+            Username = "demo-user",
+            Password = "wrong-password"
+        }));
+        Assert.False(invalidClient.IsConnected);
+    }
+
     [Fact(Timeout = 20000)]
     public async Task AbruptClientLossPublishesRetainedLastWill()
     {
@@ -20,10 +47,10 @@ public class MqttIntegrationTests
         await using var observer = new MqttHelper($"observer_{Guid.NewGuid():N}");
         observer.MessageReceivedAsync += (topic, payload, qos, retain) =>
         {
-            if (topic == "iot/lab/sensor/device_lwt/status") willReceived.TrySetResult(payload);
+            if (topic == "udm21_test/lab/sensor/device_lwt/status") willReceived.TrySetResult(payload);
             return Task.CompletedTask;
         };
-        await observer.SubscribeAsync("iot/lab/sensor/device_lwt/status");
+        await observer.SubscribeAsync("udm21_test/lab/sensor/device_lwt/status");
         await observer.ConnectAsync(IPAddress.Loopback.ToString(), broker.Port);
 
         var factory = new MqttFactory();
@@ -32,7 +59,7 @@ public class MqttIntegrationTests
         var options = new MqttClientOptionsBuilder()
             .WithClientId($"lwt_device_{Guid.NewGuid():N}")
             .WithTcpServer(IPAddress.Loopback.ToString(), broker.Port)
-            .WithWillTopic("iot/lab/sensor/device_lwt/status")
+            .WithWillTopic("udm21_test/lab/sensor/device_lwt/status")
             .WithWillPayload(willPayload)
             .WithWillQualityOfServiceLevel(MqttQualityOfServiceLevel.AtLeastOnce)
             .WithWillRetain(true)
@@ -49,14 +76,14 @@ public class MqttIntegrationTests
         await using var lateObserver = new MqttHelper($"late_observer_{Guid.NewGuid():N}");
         lateObserver.MessageReceivedAsync += (topic, retainedPayload, qos, retain) =>
         {
-            if (topic == "iot/lab/sensor/device_lwt/status")
+            if (topic == "udm21_test/lab/sensor/device_lwt/status")
             {
                 retainedReceived.TrySetResult((retainedPayload, retain));
             }
 
             return Task.CompletedTask;
         };
-        await lateObserver.SubscribeAsync("iot/lab/sensor/device_lwt/status");
+        await lateObserver.SubscribeAsync("udm21_test/lab/sensor/device_lwt/status");
         await lateObserver.ConnectAsync(IPAddress.Loopback.ToString(), broker.Port);
 
         var retained = await retainedReceived.Task.WaitAsync(TimeSpan.FromSeconds(5));
@@ -83,11 +110,11 @@ public class MqttIntegrationTests
         };
         subscriber.MessageReceivedAsync += (topic, payload, qos, retain) =>
         {
-            if (topic == "iot/test/reconnect/telemetry") messageReceived.TrySetResult(payload);
+            if (topic == "udm21_test/test/reconnect/telemetry") messageReceived.TrySetResult(payload);
             return Task.CompletedTask;
         };
 
-        await subscriber.SubscribeAsync("iot/test/reconnect/telemetry");
+        await subscriber.SubscribeAsync("udm21_test/test/reconnect/telemetry");
         await subscriber.ConnectAsync(IPAddress.Loopback.ToString(), port);
         await broker.StopAsync();
         await disconnected.Task.WaitAsync(TimeSpan.FromSeconds(5));
@@ -104,7 +131,7 @@ public class MqttIntegrationTests
         await publisher.ConnectAsync(options, CancellationToken.None);
         await publisher.PublishAsync(
             new MqttApplicationMessageBuilder()
-                .WithTopic("iot/test/reconnect/telemetry")
+                .WithTopic("udm21_test/test/reconnect/telemetry")
                 .WithPayload(Encoding.UTF8.GetBytes("reconnected"))
                 .WithQualityOfServiceLevel(MqttQualityOfServiceLevel.AtLeastOnce)
                 .Build(),
@@ -141,6 +168,20 @@ public class MqttIntegrationTests
         public Task StopAsync() => _server.IsStarted
             ? _server.StopAsync(new MqttServerStopOptionsBuilder().Build())
             : Task.CompletedTask;
+
+        public void RequireCredentials(string username, string password)
+        {
+            _server.ValidatingConnectionAsync += args =>
+            {
+                if (!string.Equals(args.UserName, username, StringComparison.Ordinal) ||
+                    !string.Equals(args.Password, password, StringComparison.Ordinal))
+                {
+                    args.ReasonCode = MqttConnectReasonCode.BadUserNameOrPassword;
+                }
+
+                return Task.CompletedTask;
+            };
+        }
 
         public async ValueTask DisposeAsync()
         {

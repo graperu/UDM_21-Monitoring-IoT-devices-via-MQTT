@@ -11,8 +11,8 @@ namespace UDM_21.Simulators.Devices
         private double _baseHum = 65.0;
         private int _counter = 0;
 
-        public TempHumidityDevice(string deviceId, string location, int interval = 3)
-            : base(deviceId, "sensor", location, interval) { }
+        public TempHumidityDevice(string deviceId, string location, int interval = 3, string topicRoot = MqttTopics.DefaultRoot)
+            : base(deviceId, "sensor", location, interval, topicRoot) { }
 
         protected override Dictionary<string, object> GenerateTelemetry()
         {

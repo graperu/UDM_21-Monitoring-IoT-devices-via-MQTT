@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using UDM_21.Shared;
 
 namespace UDM_21.Simulators.Devices
 {
@@ -9,8 +10,8 @@ namespace UDM_21.Simulators.Devices
         private double _aqi = 75.0;
         private double _co2 = 450.0;
 
-        public AirQualityDevice(string deviceId, string location, int interval = 4)
-            : base(deviceId, "sensor", location, interval) { }
+        public AirQualityDevice(string deviceId, string location, int interval = 4, string topicRoot = MqttTopics.DefaultRoot)
+            : base(deviceId, "sensor", location, interval, topicRoot) { }
 
         protected override Dictionary<string, object> GenerateTelemetry()
         {

@@ -74,7 +74,20 @@ namespace UDM_21.Dashboard
             BtnConnect.IsEnabled = false;
             try
             {
-                await _mqttController.ConnectAsync(host, port);
+                var settings = new MqttConnectionSettings
+                {
+                    Host = host,
+                    Port = port,
+                    UseTls = ChkTls.IsChecked == true,
+                    Username = TxtUsername.Text.Trim(),
+                    Password = TxtPassword.Password
+                };
+                var topicRoot = TxtTopicRoot.Text.Trim();
+
+                await _mqttController.ConnectAsync(settings, topicRoot);
+                LogConsole(
+                    $"[CONFIG] Topic root: {topicRoot}; TLS: {(settings.UseTls ? "bật" : "tắt")}; " +
+                    $"Authentication: {(string.IsNullOrWhiteSpace(settings.Username) ? "không" : "có")}");
             }
             catch (OperationCanceledException)
             {

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using UDM_21.Shared;
 
 namespace UDM_21.Simulators.Devices
 {
@@ -8,8 +9,8 @@ namespace UDM_21.Simulators.Devices
         private readonly Random _rand = new Random();
         private string _doorState = "CLOSED";
 
-        public DoorSensorDevice(string deviceId, string location, int interval = 5)
-            : base(deviceId, "security", location, interval) { }
+        public DoorSensorDevice(string deviceId, string location, int interval = 5, string topicRoot = MqttTopics.DefaultRoot)
+            : base(deviceId, "security", location, interval, topicRoot) { }
 
         protected override Dictionary<string, object> GenerateTelemetry()
         {

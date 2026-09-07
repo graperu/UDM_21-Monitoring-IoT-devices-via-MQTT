@@ -22,6 +22,9 @@ namespace UDM_21.Shared
 
         private string _host = "localhost";
         private int _port = 1883;
+        private bool _useTls;
+        private string? _username;
+        private string? _password;
         private string? _lastWillTopic;
         private string? _lastWillPayload;
         private volatile bool _isManualDisconnect;
@@ -56,12 +59,29 @@ namespace UDM_21.Shared
             string? lastWillPayload = null,
             CancellationToken cancellationToken = default)
         {
-            ThrowIfDisposed();
-            if (string.IsNullOrWhiteSpace(host)) throw new ArgumentException("Broker host không được để trống.", nameof(host));
-            if (port is < 1 or > 65535) throw new ArgumentOutOfRangeException(nameof(port));
+            await ConnectAsync(
+                new MqttConnectionSettings { Host = host, Port = port },
+                lastWillTopic,
+                lastWillPayload,
+                cancellationToken);
+        }
 
-            _host = host;
-            _port = port;
+        public async Task ConnectAsync(
+            MqttConnectionSettings settings,
+            string? lastWillTopic = null,
+            string? lastWillPayload = null,
+            CancellationToken cancellationToken = default)
+        {
+            ThrowIfDisposed();
+            ArgumentNullException.ThrowIfNull(settings);
+            settings.Validate();
+            StopReconnectLoop();
+
+            _host = settings.Host.Trim();
+            _port = settings.Port;
+            _useTls = settings.UseTls;
+            _username = string.IsNullOrWhiteSpace(settings.Username) ? null : settings.Username.Trim();
+            _password = settings.Password;
             _lastWillTopic = lastWillTopic;
             _lastWillPayload = lastWillPayload;
             _isManualDisconnect = false;
@@ -109,6 +129,15 @@ namespace UDM_21.Shared
             await SubscribeClientAsync(topic, qos, cancellationToken);
         }
 
+        public void ClearRememberedSubscriptions()
+        {
+            ThrowIfDisposed();
+            if (_client.IsConnected)
+                throw new InvalidOperationException("Phải ngắt kết nối trước khi thay đổi toàn bộ subscription.");
+
+            _subscriptions.Clear();
+        }
+
         public async Task PublishAsync(
             string topic,
             string payload,
@@ -150,6 +179,7 @@ namespace UDM_21.Shared
             _client.DisconnectedAsync -= OnDisconnectedAsync;
             _client.ApplicationMessageReceivedAsync -= OnApplicationMessageReceivedAsync;
             _client.Dispose();
+            _password = null;
         }
 
         private MqttClientOptions BuildOptions()
@@ -159,6 +189,17 @@ namespace UDM_21.Shared
                 .WithTcpServer(_host, _port)
                 .WithCleanSession(_cleanSession)
                 .WithKeepAlivePeriod(TimeSpan.FromSeconds(30));
+
+            if (_username != null)
+            {
+                builder.WithCredentials(_username, _password ?? string.Empty);
+            }
+
+            if (_useTls)
+            {
+                // Use the operating system trust store; invalid broker certificates remain rejected.
+                builder.WithTlsOptions(options => options.UseTls(true));
+            }
 
             if (!string.IsNullOrEmpty(_lastWillTopic) && !string.IsNullOrEmpty(_lastWillPayload))
             {
@@ -195,7 +236,9 @@ namespace UDM_21.Shared
             StopReconnectLoop();
             await ResubscribeAllAsync();
             await InvokeConnectionChangedAsync(true);
-            AppLogger.Info("MQTT_CONNECTED", $"client={ClientId}; endpoint={_host}:{_port}");
+            AppLogger.Info(
+                "MQTT_CONNECTED",
+                $"client={ClientId}; endpoint={(_useTls ? "mqtts" : "mqtt")}://{_host}:{_port}; authenticated={_username != null}");
         }
 
         private async Task ResubscribeAllAsync()

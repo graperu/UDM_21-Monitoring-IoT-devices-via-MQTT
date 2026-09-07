@@ -10,8 +10,8 @@ namespace UDM_21.Simulators.Devices
         private string _state = "OFF";
         private int _brightness = 80;
 
-        public SmartLightDevice(string deviceId, string location, int interval = 5)
-            : base(deviceId, "light", location, interval) { }
+        public SmartLightDevice(string deviceId, string location, int interval = 5, string topicRoot = MqttTopics.DefaultRoot)
+            : base(deviceId, "light", location, interval, topicRoot) { }
 
         protected override Dictionary<string, object> GenerateTelemetry()
         {

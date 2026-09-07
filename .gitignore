@@ -28,6 +28,10 @@ Thumbs.db
 *.sqlite
 *.db
 Extra/logs/*.log
+Extra/mosquitto/passwords.txt
+Extra/mosquitto/*.key
+Extra/mosquitto/*.crt
+Extra/mosquitto/*.pem
 
 ## Python cache
 __pycache__/

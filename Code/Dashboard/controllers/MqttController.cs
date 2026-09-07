@@ -12,6 +12,7 @@ namespace UDM_21.Dashboard.Controllers
         private readonly TelemetryMessageFilter _telemetryFilter = new TelemetryMessageFilter(100);
         private readonly MessageDeduplicator _statusDeduplicator = new MessageDeduplicator(100);
         private readonly TimestampOrderingFilter _statusOrderingFilter = new TimestampOrderingFilter();
+        private string _topicRoot = MqttTopics.DefaultRoot;
 
         public event Action<bool, string>? ConnectionStatusChanged;
         public event Action<TelemetryMessage>? TelemetryReceived;
@@ -29,20 +30,29 @@ namespace UDM_21.Dashboard.Controllers
 
         public async Task ConnectAsync(string host = "broker.emqx.io", int port = 1883)
         {
-            if (string.IsNullOrWhiteSpace(host)) throw new ArgumentException("Broker host không được để trống.", nameof(host));
-            if (port is < 1 or > 65535) throw new ArgumentOutOfRangeException(nameof(port), "Port phải nằm trong khoảng 1..65535.");
+            await ConnectAsync(
+                new MqttConnectionSettings { Host = host, Port = port },
+                MqttTopics.DefaultRoot);
+        }
+
+        public async Task ConnectAsync(MqttConnectionSettings settings, string topicRoot)
+        {
+            ArgumentNullException.ThrowIfNull(settings);
+            settings.Validate();
+            _topicRoot = MqttTopics.NormalizeRoot(topicRoot);
 
             ConnectionStatusChanged?.Invoke(false, "Đang kết nối MQTT Broker...");
+            _mqtt.ClearRememberedSubscriptions();
             await SubscribeWildcardTopicsAsync();
-            await _mqtt.ConnectAsync(host, port);
+            await _mqtt.ConnectAsync(settings);
         }
 
         public Task DisconnectAsync() => _mqtt.DisconnectAsync();
 
         public async Task SubscribeWildcardTopicsAsync()
         {
-            await _mqtt.SubscribeAsync("iot/+/+/+/telemetry", MqttQualityOfServiceLevel.AtLeastOnce);
-            await _mqtt.SubscribeAsync("iot/+/+/+/status", MqttQualityOfServiceLevel.AtLeastOnce);
+            await _mqtt.SubscribeAsync(MqttTopics.TelemetryWildcard(_topicRoot), MqttQualityOfServiceLevel.AtLeastOnce);
+            await _mqtt.SubscribeAsync(MqttTopics.StatusWildcard(_topicRoot), MqttQualityOfServiceLevel.AtLeastOnce);
         }
 
         public async Task SendCommandAsync(
@@ -66,7 +76,7 @@ namespace UDM_21.Dashboard.Controllers
                 throw new ArgumentException(error, nameof(command));
             }
 
-            var topic = $"iot/{location}/{deviceType}/{deviceId}/cmd";
+            var topic = MqttTopics.Command(_topicRoot, location, deviceType, deviceId);
             var commandMessage = new CommandMessage
             {
                 Command = command,
@@ -142,7 +152,8 @@ namespace UDM_21.Dashboard.Controllers
                     message.DeviceId,
                     message.DeviceType,
                     message.Location,
-                    out error))
+                    out error,
+                    _topicRoot))
             {
                 Reject(error);
                 return;
@@ -165,7 +176,7 @@ namespace UDM_21.Dashboard.Controllers
                 return;
             }
 
-            if (!MessageValidator.ValidateTopic(topic, "status", status.DeviceId, null, null, out error))
+            if (!MessageValidator.ValidateTopic(topic, "status", status.DeviceId, null, null, out error, _topicRoot))
             {
                 Reject(error);
                 return;

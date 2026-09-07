@@ -6,7 +6,7 @@ namespace UDM_21.Shared
 {
     /// <summary>
     /// Thông điệp dữ liệu cảm biến (Telemetry) thiết bị gửi về Broker
-    /// Topic: iot/{location}/{device_type}/{device_id}/telemetry
+    /// Topic: {topic_root}/{location}/{device_type}/{device_id}/telemetry
     /// </summary>
     public class TelemetryMessage
     {
@@ -49,7 +49,7 @@ namespace UDM_21.Shared
 
     /// <summary>
     /// Thông điệp trạng thái Online/Offline của thiết bị (Sử dụng Last Will & Testament - LWT)
-    /// Topic: iot/{location}/{device_type}/{device_id}/status
+    /// Topic: {topic_root}/{location}/{device_type}/{device_id}/status
     /// </summary>
     public class DeviceStatusMessage
     {
@@ -72,7 +72,7 @@ namespace UDM_21.Shared
 
     /// <summary>
     /// Thông điệp lệnh điều khiển từ Dashboard gửi về thiết bị
-    /// Topic: iot/{location}/{device_type}/{device_id}/cmd
+    /// Topic: {topic_root}/{location}/{device_type}/{device_id}/cmd
     /// </summary>
     public class CommandMessage
     {
