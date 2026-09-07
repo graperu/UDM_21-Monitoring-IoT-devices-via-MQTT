@@ -33,7 +33,7 @@ ISSUES = [
     },
     {
         "title": "Xây dựng MqttController quản lý Pub/Sub và kết nối Broker",
-        "body": "### Mô tả công việc\n- Khởi tạo MqttHelper với Client ID duy nhất để tránh xung đột\n- Đăng ký nhận tin Wildcard: `iot/+/+/+/telemetry` và `iot/+/+/+/status`\n- Bắt các sự kiện kết nối, ngắt kết nối và điều phối dữ liệu về UI\n\n**Người thực hiện:** Huyền Trâm\n**Thư mục/File:** `Code/Dashboard/Controllers/MqttController.cs`",
+        "body": "### Mô tả công việc\n- Khởi tạo MqttHelper với Client ID duy nhất để tránh xung đột\n- Đăng ký nhận tin Wildcard theo topic root riêng của nhóm\n- Bắt các sự kiện kết nối, ngắt kết nối và điều phối dữ liệu về UI\n\n**Người thực hiện:** Huyền Trâm\n**Thư mục/File:** `Code/Dashboard/Controllers/MqttController.cs`",
         "labels": ["backend", "controller", "mqtt"],
         "done": True
     },
@@ -45,7 +45,7 @@ ISSUES = [
     },
     {
         "title": "Xử lý sự kiện gửi Command điều khiển từ GUI",
-        "body": "### Mô tả công việc\n- Bắt sự kiện Click nút 'Phát Lệnh Qua MQTT'\n- Validate cú pháp chuỗi JSON tham số trước khi phát tin\n- Phát tin lệnh qua topic `iot/{location}/{deviceType}/{deviceId}/cmd` với QoS 1\n\n**Người thực hiện:** Huyền Trâm\n**Thư mục/File:** `Code/Dashboard/MainWindow.xaml.cs`",
+        "body": "### Mô tả công việc\n- Bắt sự kiện Click nút 'Phát Lệnh Qua MQTT'\n- Validate cú pháp chuỗi JSON tham số trước khi phát tin\n- Phát tin lệnh qua topic `{topicRoot}/{location}/{deviceType}/{deviceId}/cmd` với QoS 1\n\n**Người thực hiện:** Huyền Trâm\n**Thư mục/File:** `Code/Dashboard/MainWindow.xaml.cs`",
         "labels": ["backend", "controller"],
         "done": True
     },

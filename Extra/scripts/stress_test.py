@@ -7,7 +7,7 @@ if sys.platform == "win32":
     sys.stdout.reconfigure(encoding="utf-8")
     sys.stderr.reconfigure(encoding="utf-8")
 
-from test_runner import BROKER, PORT, get_test_environment, run_stress_test
+from test_runner import BROKER, PORT, TOPIC_ROOT, USE_TLS, MQTT_USERNAME, get_test_environment, run_stress_test
 
 
 def main():
@@ -20,6 +20,9 @@ def main():
     report = {
         "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
         "broker": f"{BROKER}:{PORT}",
+        "topic_root": TOPIC_ROOT,
+        "tls": USE_TLS,
+        "authenticated": bool(MQTT_USERNAME),
         "environment": get_test_environment(),
         "method": {
             "latency": "RTT từ lúc publish() đến callback PUBACK cho từng message",

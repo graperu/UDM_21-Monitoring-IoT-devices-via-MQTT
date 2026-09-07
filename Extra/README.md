@@ -17,5 +17,5 @@ python Extra/scripts/stress_test.py
 
 - `dotnet test` chạy unit/integration test với MQTT broker cục bộ được dựng tự động.
 - `stress_test.py` đo RTT từ `publish()` đến PUBACK của từng message ở 2 mức tải.
-- Có thể đổi broker bằng `UDM21_TEST_BROKER` và `UDM21_TEST_PORT`.
-- Cấu hình OS, CPU, RAM, runtime và kết quả được lưu trong `test_results/stress_report.json`.
+- Có thể đổi broker/topic bằng `UDM21_TEST_BROKER`, `UDM21_TEST_PORT` và `UDM21_TEST_TOPIC_ROOT`.
+- Cấu hình OS, CPU, RAM, runtime và kết quả E2E mới nhất được lưu trong `test_results/test_report.json`.

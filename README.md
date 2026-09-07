@@ -30,12 +30,12 @@
 | **2** | **Huỳnh Nữ Huyền Trâm** | `051305001244` | **Lập trình Logic Dashboard & Controller:** Viết `MqttController.cs`, xử lý `Dispatcher.BeginInvoke` để cập nhật UI bất đồng bộ, triển khai `INotifyPropertyChanged` trong `DeviceItem.cs`, xử lý sự kiện gửi lệnh và tích hợp `TelemetryHistoryManager`. | `Code/Dashboard/Controllers/`<br>`Code/Dashboard/Models/`<br>`Code/Dashboard/MainWindow.xaml.cs` | **100% (Hoàn thành)** |
 | **3** | **Phan Văn Đỉnh** | `054205003603` | **Trưởng nhóm - Lập trình Thiết bị Giả lập IoT:** Xây dựng `DeviceBase.cs` đa luồng (`Task.Delay` + `CancellationToken`), lập trình 5 thiết bị giả lập cảm biến độc lập, cấu hình LWT Online/Offline, chuẩn hóa `message_id` GUID và `timestamp` ISO-8601 UTC. | `Code/Simulators/DeviceBase.cs`<br>`Code/Simulators/Devices/`<br>`Code/Simulators/Program.cs` | **100% (Hoàn thành)** |
 | **4** | **Huỳnh Gia Hợp** | `054205008367` | **Giao thức Mạng Cốt lõi & Reliability:** Xây dựng `MqttHelper.cs` (Wrapper MQTTnet v4), cấu hình QoS 0/1, Auto-reconnect Exponential Backoff (2s → 30s), định nghĩa JSON Data Contract trong `Protocol.cs`, cài đặt bộ lọc Message Trùng (Deduplication) và Đến Trễ (Out-of-order). | `Code/Shared/MqttHelper.cs`<br>`Code/Shared/Protocol.cs`<br>`Code/Shared/Shared.csproj` | **100% (Hoàn thành)** |
-| **5** | **Lưu Đình Thuận** | `075205010434` | **Kiểm Thử, Đo Đạc Hiệu Năng & Báo Cáo:** Xây dựng `stress_test.py` và `test_runner.py`, đo đạc Throughput và Latency ở 2 mức tải (500 msgs và 2.000 msgs), tổng hợp dữ liệu kiểm thử, biên soạn tài liệu Báo cáo Word (`DOCX/`) và Slide bảo vệ (`PPTX/`). | `Extra/scripts/`<br>`Extra/test_results/`<br>`DOCX/`<br>`PPTX/` | **100% (Hoàn thành)** |
+| **5** | **Lưu Đình Thuận** | `075205010434` | **Kiểm Thử, Đo Đạc Hiệu Năng & Báo Cáo:** Xây dựng `stress_test.py` và `test_runner.py`, đo Throughput/RTT ở hai mức tải, tổng hợp bằng chứng kiểm thử và chuẩn bị nội dung báo cáo. File Word, slide và video chính thức vẫn cần được nhóm hoàn thiện trước khi nộp. | `Extra/scripts/`<br>`Extra/test_results/`<br>`DOCX/`<br>`PPTX/` | **Đang hoàn thiện hồ sơ** |
 
 ---
 
 ## 📽️ 2. Link Video Demo Hệ Thống
-* **URL Video Demo (YouTube / Google Drive Unlisted):** [https://youtu.be/udm21-demo-iot-mqtt](https://youtube.com/) *(Đang cập nhật link video thuyết minh)*
+* **URL Video Demo (YouTube / Google Drive Unlisted):** Chưa có. Nhóm phải thay dòng này bằng link video thật trước khi nộp.
 * **Nội dung Demo:** Khởi động đồng thời 5 thiết bị, Dashboard nhận dữ liệu Real-time, phát hiện cảnh báo nhiệt độ > 40°C, gửi lệnh bật/tắt đèn và đổi độ sáng tức thì, test ngắt kết nối đột ngột kích hoạt LWT và tự động Reconnect.
 
 ---
@@ -43,7 +43,7 @@
 ## 📐 3. Tổng Quan Kiến Trúc & Thiết Kế Giao Thức Mạng
 
 ### 3.1. Mô hình Kiến trúc Publish / Subscribe qua MQTT Broker
-Hệ thống tuân thủ mô hình mạng phân tán chuẩn, giao tiếp hoàn toàn qua giao thức TCP/IP MQTT (Port 1883), không gọi hàm nội bộ giữa các tiến trình:
+Hệ thống tuân thủ mô hình mạng phân tán chuẩn, giao tiếp hoàn toàn qua giao thức TCP/IP MQTT (port cấu hình được; hỗ trợ kết nối thường và TLS), không gọi hàm nội bộ giữa các tiến trình:
 
 ```text
 ┌─────────────────────────────────────────┐                     ┌─────────────────────────────────────────┐
@@ -63,7 +63,7 @@ Hệ thống tuân thủ mô hình mạng phân tán chuẩn, giao tiếp hoàn 
                    │                                                               │
                    ▼                                                               │
         ┌──────────────────────────────────────────────────────────────────────────┴──────────────────────┐
-        │                                  MQTT Broker (Port 1883)                                        │
+        │                         MQTT Broker (TCP 1883 hoặc TLS theo cấu hình)                            │
         │                        (Public: broker.emqx.io | Local: Eclipse Mosquitto)                      │
         │                                                                                                 │
         │  • Quản lý Client Sessions, Routing bản tin theo Topic Tree và Wildcard                         │
@@ -79,7 +79,7 @@ Hệ thống tuân thủ mô hình mạng phân tán chuẩn, giao tiếp hoàn 
 2. **Duy trì kết nối (Heartbeat):**
    * Định kỳ gửi gói `PINGREQ` và nhận `PINGRESP` mỗi 30 giây để duy trì Socket TCP.
 3. **Đăng ký nhận tin (Subscription):**
-   * Dashboard gửi `SUBSCRIBE` với Topic Wildcard `iot/+/+/+/telemetry` và `iot/+/+/+/status`.
+   * Dashboard gửi `SUBSCRIBE` với Topic Wildcard `udm21_nhom01/+/+/+/telemetry` và `udm21_nhom01/+/+/+/status`.
    * Broker trả lời `SUBACK`.
 4. **Kết thúc kết nối:**
    * *Ngắt chủ động:* Gửi gói `DISCONNECT` và đóng Socket an toàn.
@@ -90,13 +90,13 @@ Hệ thống tuân thủ mô hình mạng phân tán chuẩn, giao tiếp hoàn 
 ## 📡 4. Thiết Kế Cấu Trúc Topic & Data Contract JSON
 
 ### 4.1. Cấu trúc Topic Phân cấp Chuẩn
-Quy tắc phân cấp: `iot/{location}/{device_type}/{device_id}/{action_or_type}`
+Quy tắc phân cấp: `{topic_root}/{location}/{device_type}/{device_id}/{action_or_type}`. Giá trị mặc định `udm21_nhom01` tách dữ liệu của nhóm khỏi các topic `iot/...` công cộng và có thể đổi đồng thời trên Dashboard/Simulator.
 
 | Loại Topic | Mẫu Topic Cụ Thể | QoS | Retain | Chức Năng |
 |:---|:---|:---:|:---:|:---|
-| **Telemetry** | `iot/lab/sensor/temp_hum_01/telemetry`<br>`iot/factory/sensor/air_quality_01/telemetry`<br>`iot/home/meter/power_meter_01/telemetry`<br>`iot/home/light/smart_light_01/telemetry`<br>`iot/lab/security/door_sensor_01/telemetry` | `0` | `false` | Thiết bị phát số liệu cảm biến định kỳ (2s - 5s). Dashboard subscribe bằng wildcard: `iot/+/+/+/telemetry`. |
-| **Status (LWT)**| `iot/{location}/{device_type}/{device_id}/status` | `1` | `true` | Báo trạng thái `online` khi kết nối và `offline` khi ngắt mạng (sử dụng Retain Flag để Dashboard nhận ngay khi mở lên). |
-| **Command** | `iot/{location}/{device_type}/{device_id}/cmd` | `1` | `false` | Dashboard gửi lệnh điều khiển (bật/tắt, chỉnh độ sáng) tới thiết bị đích. |
+| **Telemetry** | `udm21_nhom01/lab/sensor/temp_hum_01/telemetry`<br>`udm21_nhom01/factory/sensor/air_quality_01/telemetry`<br>`udm21_nhom01/home/meter/power_meter_01/telemetry`<br>`udm21_nhom01/home/light/smart_light_01/telemetry`<br>`udm21_nhom01/lab/security/door_sensor_01/telemetry` | `0` | `false` | Thiết bị phát số liệu cảm biến định kỳ (2s - 5s). Dashboard subscribe bằng wildcard: `udm21_nhom01/+/+/+/telemetry`. |
+| **Status (LWT)**| `udm21_nhom01/{location}/{device_type}/{device_id}/status` | `1` | `true` | Báo trạng thái `online` khi kết nối và `offline` khi ngắt mạng (sử dụng Retain Flag để Dashboard nhận ngay khi mở lên). |
+| **Command** | `udm21_nhom01/{location}/{device_type}/{device_id}/cmd` | `1` | `false` | Dashboard gửi lệnh điều khiển (bật/tắt, chỉnh độ sáng) tới thiết bị đích. |
 
 ---
 
@@ -175,8 +175,12 @@ Quy tắc phân cấp: `iot/{location}/{device_type}/{device_id}/{action_or_type
      * Chỉ số AQI $> 150$ $\rightarrow$ Báo động chất lượng không khí nguy hại.
    * Đổi màu đèn LED chỉ thị sang màu **Đỏ cam (`OrangeRed`)** và xuất cảnh báo trên Console Log.
 6. **Bảo mật & Quản lý Tài nguyên:**
-   * Không hard-code mật khẩu/private key trong mã nguồn; tham số kết nối IP/Port hoàn toàn cấu hình động qua GUI và CLI.
+   * Không hard-code mật khẩu/private key trong mã nguồn; host, port, topic root, TLS và username cấu hình qua GUI/CLI. Simulator đọc password từ biến môi trường `UDM21_MQTT_PASSWORD` hoặc tên biến truyền qua `--password-env`.
+   * Khi bật TLS, MQTTnet dùng kho chứng chỉ tin cậy của hệ điều hành và từ chối chứng chỉ broker không hợp lệ.
    * Toàn bộ luồng nền `Task.Delay` đều liên kết với `CancellationTokenSource` và giải phóng Socket/Client sạch sẽ khi ứng dụng dừng (`Dispose`/`DisconnectAsync`).
+7. **Lịch sử bền vững:**
+   * Dashboard lưu telemetry vào SQLite `Extra/data/telemetry.db`; khóa chính `message_id` loại bản ghi trùng cả sau khi khởi động lại.
+   * GUI hiển thị 20 bản tin gần nhất và database tự giới hạn tối đa 10.000 bản tin cho mỗi thiết bị.
 
 ---
 
@@ -193,7 +197,7 @@ UDM_21-Monitoring-IoT-devices-via-MQTT/
 │   ├── Dashboard/                         # WPF Desktop Dashboard Application
 │   │   ├── Controllers/MqttController.cs  # Điều phối MQTTnet, Deduplication & Dispatcher
 │   │   ├── Models/DeviceItem.cs           # Model implement INotifyPropertyChanged
-│   │   ├── Services/TelemetryHistoryManager.cs # Quản lý 20 bản tin lịch sử gần nhất
+│   │   ├── Services/TelemetryHistoryManager.cs # SQLite, hiển thị 20 và lưu tối đa 10.000 bản tin/device
 │   │   ├── App.xaml / App.xaml.cs
 │   │   ├── MainWindow.xaml / .cs          # Giao diện chính (DataGrid, Form lệnh, Console)
 │   │   └── TelemetryHistoryWindow.xaml/.cs # Cửa sổ xem lịch sử chi tiết 20 bản ghi
@@ -209,8 +213,8 @@ UDM_21-Monitoring-IoT-devices-via-MQTT/
 │   └── Shared/                            # Class Library dùng chung
 │       ├── MqttHelper.cs                  # Wrapper MQTTnet v4, QoS 0/1, Auto-reconnect Backoff
 │       └── Protocol.cs                    # JSON Data Contract (Telemetry, Status, Command)
-├── DOCX/                                  # Báo cáo đồ án chính thức
-│   ├── Bao_Cao_UDM_21_Giam_Sat_IoT_MQTT.docx
+├── DOCX/                                  # Báo cáo Markdown; file .docx chưa được thêm
+│   ├── BaoCao_CapNhat_HeThong.md
 │   └── README.md
 ├── Extra/                                 # Tài liệu kiểm thử & công cụ bổ trợ
 │   ├── logs/                              # Nhật ký chạy hệ thống
@@ -221,8 +225,7 @@ UDM_21-Monitoring-IoT-devices-via-MQTT/
 │   └── test_results/                      # Kết quả đo đạc kiểm thử
 │       ├── test_report.json               # Dữ liệu kiểm thử JSON
 │       └── Bao_Cao_Kiem_Thu_He_Thong.md   # Báo cáo kiểm thử chi tiết Markdown
-├── PPTX/                                  # Slide thuyết trình bảo vệ đồ án
-│   ├── Slide_Thuyet_Trinh_UDM_21.pptx
+├── PPTX/                                  # File .pptx chính thức chưa được thêm
 │   └── README.md
 ├── run.bat                                # Script khởi chạy 1-Click toàn bộ hệ thống
 ├── .gitignore                             # Loại trừ build artifacts (bin, obj, .vs)
@@ -255,15 +258,32 @@ Mở 2 cửa sổ Terminal độc lập tại thư mục gốc của dự án:
 
 ```bash
 # Terminal 1: Chạy 5 Thiết bị giả lập IoT
-dotnet run --project Code/Simulators/Simulators.csproj broker.emqx.io 1883
+dotnet run --project Code/Simulators/Simulators.csproj -- --host broker.emqx.io --port 1883 --topic-root udm21_nhom01
 
 # Terminal 2: Chạy Giao diện WPF Dashboard
 dotnet run --project Code/Dashboard/Dashboard.csproj
 ```
 
 > **Mẹo sử dụng Broker Nội Bộ (Local Broker):**
-> Nếu muốn chạy hoàn toàn Offline bằng Mosquitto nội bộ, bạn chỉ cần gõ:
-> `dotnet run --project Code/Simulators/Simulators.csproj localhost 1883`
+> Khởi động broker bằng `mosquitto -c Extra/mosquitto/mosquitto.local.conf -v`, nhập `localhost:1883` trên Dashboard rồi chạy Simulator với `--host localhost`.
+
+### Chạy mỗi thiết bị trong một tiến trình riêng
+
+Nhấp đúp `run-multiprocess.bat`, hoặc chạy riêng từng thiết bị:
+
+```powershell
+dotnet run --project Code/Simulators/Simulators.csproj -- --device temp_hum_01
+dotnet run --project Code/Simulators/Simulators.csproj -- --device smart_light_01
+```
+
+### TLS và tài khoản MQTT
+
+Dashboard có sẵn ô TLS, Username và Password. Simulator nhận cấu hình tương đương mà không đưa password vào command line:
+
+```powershell
+$env:UDM21_MQTT_PASSWORD = "mat-khau-demo"
+dotnet run --project Code/Simulators/Simulators.csproj -- --host mqtt.example.com --port 8883 --tls --username demo --password-env UDM21_MQTT_PASSWORD
+```
 
 ---
 
@@ -271,7 +291,7 @@ dotnet run --project Code/Dashboard/Dashboard.csproj
 
 Hệ thống có script end-to-end `Extra/scripts/test_runner.py` kết nối trực tiếp với Public Broker `broker.emqx.io:1883`.
 
-Ngoài ra, solution có project `Code/Tests` với **13 test tự động**. Các integration test dựng MQTT broker cục bộ bằng MQTTnet để kiểm tra dữ liệu sai, message trùng, message đến trễ, LWT khi client mất đột ngột, phát hiện broker ngắt và tự động reconnect/re-subscribe:
+Ngoài ra, solution có project `Code/Tests` với **19 test tự động**. Các test kiểm tra dữ liệu sai, message trùng, message đến trễ, topic root, authentication, SQLite còn dữ liệu sau restart, LWT khi client mất đột ngột, phát hiện broker ngắt và tự động reconnect/re-subscribe:
 
 ```bash
 dotnet test Code/UDM_21.sln
@@ -293,10 +313,10 @@ dotnet test Code/UDM_21.sln
 
 | Mức Tải | Số Lượng Message | QoS | Tỷ Lệ ACK | Tổng Thời Gian | Throughput | RTT trung bình | RTT P95 |
 |:---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| **Mức 1 (Tải nhẹ)** | 500 | 1 | **100% (500/500)** | 6.29 s | **79.46 msg/s** | **3,219.04 ms** | **5,898.41 ms** |
-| **Mức 2 (Tải nặng)** | 2.000 | 1 | **100% (2000/2000)** | 26.02 s | **76.88 msg/s** | **12,953.73 ms** | **24,512.80 ms** |
+| **Mức 1 (Tải nhẹ)** | 500 | 1 | **100% (500/500)** | 7.91 s | **63.22 msg/s** | **4,024.83 ms** | **7,413.53 ms** |
+| **Mức 2 (Tải nặng)** | 2.000 | 1 | **100% (2000/2000)** | 27.65 s | **72.35 msg/s** | **14,397.31 ms** | **26,357.61 ms** |
 
-Kết quả trên được đo ngày 06/09/2026 qua public broker. RTT cao ở mức tải nặng phản ánh cả thời gian chờ trong hàng đợi QoS 1, không phải chỉ độ trễ đường truyền. Cấu hình máy, phiên bản runtime, phương pháp đo và dữ liệu gốc nằm trong `Extra/test_results/stress_report.json`.
+Kết quả trên được đo ngày 07/09/2026 qua public broker với namespace cô lập `udm21_nhom01_test`. RTT cao ở mức tải nặng phản ánh cả thời gian chờ trong hàng đợi QoS 1, không phải chỉ độ trễ đường truyền. Cấu hình máy, phiên bản runtime, phương pháp đo và dữ liệu gốc nằm trong `Extra/test_results/test_report.json`.
 
 ---
 
@@ -304,9 +324,11 @@ Kết quả trên được đo ngày 06/09/2026 qua public broker. RTT cao ở m
 
 ### Giới hạn sản phẩm:
 * Dự án tập trung vào lập trình mạng tầng ứng dụng qua MQTT; các thiết bị phần cứng cảm biến được giả lập trên tiến trình phần mềm C# đa luồng thay vì mạch vi điều khiển ESP32/Arduino vật lý.
-* Dữ liệu lịch sử 20 bản tin đo gần nhất được lưu trữ tạm thời trong bộ nhớ RAM (`TelemetryHistoryManager`), chưa tích hợp cơ sở dữ liệu quan hệ (SQL/NoSQL) để lưu trữ dài hạn nhiều tháng.
+* SQLite giới hạn 10.000 bản tin gần nhất cho mỗi thiết bị; hệ thống chưa được thiết kế để lưu dữ liệu nhiều tháng hoặc phân tích time-series quy mô lớn.
+* TLS và authentication phụ thuộc broker được chọn và thông tin tài khoản hợp lệ; cấu hình demo mặc định vẫn dùng MQTT không mã hóa với dữ liệu giả lập.
+* Hồ sơ nộp môn hiện chưa có file Word `.docx`, slide `.pptx` và link video demo thật.
 
 ### Hướng phát triển tương lai:
 * Tích hợp cơ sở dữ liệu thời gian thực (InfluxDB / TimescaleDB) để vẽ biểu đồ đường (Line Chart) trực quan hóa xu hướng nhiệt độ và công suất tiêu thụ theo thời gian.
-* Tích hợp giao thức bảo mật Transport Layer Security (MQTT qua TLS/SSL Port 8883) với chứng chỉ số X.509 để mã hóa gói tin trên đường truyền.
+* Bổ sung mutual TLS với chứng chỉ client và cơ chế phân quyền ACL riêng cho từng thiết bị.
 * Phát triển ứng dụng Mobile (.NET MAUI) để quản trị viên có thể nhận thông báo đẩy (Push Notification) khi có cảnh báo cháy hoặc rò rỉ khí độc từ xa.

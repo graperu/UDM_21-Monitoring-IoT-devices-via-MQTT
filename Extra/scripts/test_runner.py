@@ -18,7 +18,17 @@ if sys.platform == "win32":
 
 BROKER = os.environ.get("UDM21_TEST_BROKER", "broker.emqx.io")
 PORT = int(os.environ.get("UDM21_TEST_PORT", "1883"))
+TOPIC_ROOT = os.environ.get("UDM21_TEST_TOPIC_ROOT", "udm21_nhom01_test")
+USE_TLS = os.environ.get("UDM21_TEST_TLS", "false").lower() in ("1", "true", "yes")
+MQTT_USERNAME = os.environ.get("UDM21_TEST_USERNAME")
+MQTT_PASSWORD = os.environ.get("UDM21_TEST_PASSWORD")
 TEST_TIMEOUT = 35
+
+def configure_mqtt_client(client):
+    if MQTT_USERNAME:
+        client.username_pw_set(MQTT_USERNAME, MQTT_PASSWORD or "")
+    if USE_TLS:
+        client.tls_set()
 
 def get_total_memory_mb():
     if sys.platform != "win32":
@@ -99,6 +109,9 @@ EXPECTED_DEVICES = {
 test_results = {
     "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
     "broker": f"{BROKER}:{PORT}",
+    "topic_root": TOPIC_ROOT,
+    "tls": USE_TLS,
+    "authenticated": bool(MQTT_USERNAME),
     "environment": get_test_environment(),
     "test_cases": {},
     "summary": {"total": 0, "passed": 0, "failed": 0}
@@ -114,8 +127,8 @@ lock = threading.Lock()
 
 def on_connect(client, userdata, flags, rc, properties=None):
     print(f"[TEST RUNNER] Đã kết nối thành công tới MQTT Broker: {BROKER}:{PORT}")
-    client.subscribe("iot/#", qos=1)
-    print("[TEST RUNNER] Đã subscribe topic wildcard: iot/#")
+    client.subscribe(f"{TOPIC_ROOT}/#", qos=1)
+    print(f"[TEST RUNNER] Đã subscribe topic wildcard: {TOPIC_ROOT}/#")
 
 def on_message(client, userdata, msg):
     global received_command_telemetry
@@ -168,6 +181,7 @@ def run_tests():
     # 1. Setup MQTT Test Client
     client_id = f"TestRunner_{uuid.uuid4().hex[:6]}"
     client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id)
+    configure_mqtt_client(client)
     client.on_connect = on_connect
     client.on_message = on_message
 
@@ -177,15 +191,23 @@ def run_tests():
     time.sleep(2)
 
     # 2. Launch Simulators Process
-    sim_exe = os.path.abspath("Code/Simulators/bin/Debug/net8.0/Simulators.exe")
+    sim_exe = os.path.abspath("Code/Simulators/bin/Release/net8.0/Simulators.exe")
     print(f"2. Khởi chạy 5 Thiết bị giả lập từ: {sim_exe}")
     
-    sim_proc = subprocess.Popen([sim_exe, BROKER, str(PORT)],
+    simulator_environment = os.environ.copy()
+    if MQTT_USERNAME:
+        simulator_environment["UDM21_MQTT_USERNAME"] = MQTT_USERNAME
+        simulator_environment["UDM21_MQTT_PASSWORD"] = MQTT_PASSWORD or ""
+    sim_args = [sim_exe, "--host", BROKER, "--port", str(PORT), "--topic-root", TOPIC_ROOT]
+    if USE_TLS:
+        sim_args.append("--tls")
+    sim_proc = subprocess.Popen(sim_args,
                                 stdin=subprocess.PIPE,
                                 stdout=subprocess.PIPE,
                                 stderr=subprocess.PIPE,
                                 text=True,
-                                encoding="utf-8")
+                                encoding="utf-8",
+                                env=simulator_environment)
 
     print(f"3. Lắng nghe dữ liệu trong {TEST_TIMEOUT} giây...\n")
 
@@ -200,7 +222,7 @@ def run_tests():
         "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "params": {"state": "ON"}
     }
-    client.publish("iot/home/light/smart_light_01/cmd", json.dumps(cmd_payload), qos=1)
+    client.publish(f"{TOPIC_ROOT}/home/light/smart_light_01/cmd", json.dumps(cmd_payload), qos=1)
 
     # Wait for alert and remaining data
     time.sleep(TEST_TIMEOUT - 8)
@@ -297,6 +319,8 @@ def run_tests():
 
     print(f"\n[XONG] Đã lưu báo cáo kết quả kiểm thử vào: {report_file}")
     print(f"TỔNG KẾT: {passed_tcs}/{total_tcs} Test Cases PASSED ({passed_tcs/total_tcs*100:.1f}%)")
+    if passed_tcs != total_tcs:
+        raise SystemExit(1)
 
 def run_stress_test():
     results = {}
@@ -320,6 +344,7 @@ def run_stress_test():
                     done_event.set()
 
         stress_cli = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, f"StressCli_{level}_{uuid.uuid4().hex[:4]}")
+        configure_mqtt_client(stress_cli)
         stress_cli.on_publish = on_pub
         stress_cli.connect(BROKER, PORT, 60)
         stress_cli.loop_start()
@@ -330,7 +355,7 @@ def run_stress_test():
             msg_data = {"id": i, "timestamp": time.time(), "data": "x" * 64}
             with ack_lock:
                 sent_at = time.perf_counter()
-                info = stress_cli.publish("iot/test/stress", json.dumps(msg_data), qos=1)
+                info = stress_cli.publish(f"{TOPIC_ROOT}/test/stress", json.dumps(msg_data), qos=1)
                 send_times[info.mid] = sent_at
 
         # Timeout tăng theo tải nhưng luôn hữu hạn; public broker có thể throttle QoS 1.
