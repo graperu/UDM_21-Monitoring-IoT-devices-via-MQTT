@@ -214,45 +214,145 @@ namespace UDM_21.Shared
             IReadOnlyDictionary<string, object> parameters,
             out string error)
         {
-            if (!string.Equals(deviceType, "light", StringComparison.OrdinalIgnoreCase))
-            {
-                error = $"Thiết bị loại '{deviceType}' chưa hỗ trợ lệnh điều khiển.";
-                return false;
-            }
+            string devType = deviceType?.ToLowerInvariant() ?? "";
+            string cmd = command?.Trim().ToUpperInvariant() ?? "";
 
-            if (string.Equals(command, "TOGGLE_POWER", StringComparison.OrdinalIgnoreCase))
+            switch (devType)
             {
-                if (parameters.TryGetValue("state", out var stateValue))
-                {
-                    var state = stateValue?.ToString();
-                    if (!string.Equals(state, "ON", StringComparison.OrdinalIgnoreCase) &&
-                        !string.Equals(state, "OFF", StringComparison.OrdinalIgnoreCase))
+                case "light":
+                    if (cmd == "TOGGLE_POWER")
                     {
-                        error = "state chỉ được phép là ON hoặc OFF.";
-                        return false;
+                        if (parameters.TryGetValue("state", out var stateValue))
+                        {
+                            var state = stateValue?.ToString();
+                            if (!string.Equals(state, "ON", StringComparison.OrdinalIgnoreCase) &&
+                                !string.Equals(state, "OFF", StringComparison.OrdinalIgnoreCase))
+                            {
+                                error = "state chỉ được phép là ON hoặc OFF.";
+                                return false;
+                            }
+                        }
+                        error = string.Empty;
+                        return true;
                     }
-                }
-
-                error = string.Empty;
-                return true;
-            }
-
-            if (string.Equals(command, "SET_BRIGHTNESS", StringComparison.OrdinalIgnoreCase))
-            {
-                if (!parameters.TryGetValue("brightness", out var value) ||
-                    !int.TryParse(Convert.ToString(value, CultureInfo.InvariantCulture), out var brightness) ||
-                    brightness < 0 || brightness > 100)
-                {
-                    error = "brightness phải là số nguyên trong khoảng 0..100.";
+                    if (cmd == "SET_BRIGHTNESS")
+                    {
+                        if (!parameters.TryGetValue("brightness", out var value) ||
+                            !int.TryParse(Convert.ToString(value, CultureInfo.InvariantCulture), out var brightness) ||
+                            brightness < 0 || brightness > 100)
+                        {
+                            error = "brightness phải là số nguyên trong khoảng 0..100.";
+                            return false;
+                        }
+                        error = string.Empty;
+                        return true;
+                    }
+                    error = $"Lệnh '{command}' không được hỗ trợ cho đèn thông minh.";
                     return false;
-                }
 
-                error = string.Empty;
-                return true;
+                case "security":
+                    if (cmd == "OPEN_DOOR" || cmd == "CLOSE_DOOR" || cmd == "TOGGLE_DOOR")
+                    {
+                        error = string.Empty;
+                        return true;
+                    }
+                    if (cmd == "SET_DOOR_STATE")
+                    {
+                        if (parameters.TryGetValue("door_state", out var dsVal))
+                        {
+                            var ds = dsVal?.ToString();
+                            if (!string.Equals(ds, "OPEN", StringComparison.OrdinalIgnoreCase) &&
+                                !string.Equals(ds, "CLOSED", StringComparison.OrdinalIgnoreCase))
+                            {
+                                error = "door_state chỉ được phép là OPEN hoặc CLOSED.";
+                                return false;
+                            }
+                        }
+                        error = string.Empty;
+                        return true;
+                    }
+                    if (cmd == "TRIGGER_ALARM" || cmd == "CLEAR_ALARM")
+                    {
+                        error = string.Empty;
+                        return true;
+                    }
+                    error = $"Lệnh '{command}' không được hỗ trợ cho cảm biến an ninh (Cửa).";
+                    return false;
+
+                case "sensor":
+                    if (cmd == "SET_TEMPERATURE")
+                    {
+                        if (!parameters.TryGetValue("temperature", out var tVal) ||
+                            !double.TryParse(Convert.ToString(tVal, CultureInfo.InvariantCulture), out var temp) ||
+                            temp < -40 || temp > 100)
+                        {
+                            error = "temperature phải là số trong khoảng -40..100°C.";
+                            return false;
+                        }
+                        error = string.Empty;
+                        return true;
+                    }
+                    if (cmd == "TRIGGER_HEAT_ALERT")
+                    {
+                        error = string.Empty;
+                        return true;
+                    }
+                    if (cmd == "SET_AQI")
+                    {
+                        if (!parameters.TryGetValue("aqi", out var aVal) ||
+                            !double.TryParse(Convert.ToString(aVal, CultureInfo.InvariantCulture), out var aqi) ||
+                            aqi < 0 || aqi > 500)
+                        {
+                            error = "aqi phải là số trong khoảng 0..500.";
+                            return false;
+                        }
+                        error = string.Empty;
+                        return true;
+                    }
+                    if (cmd == "PURIFY_AIR" || cmd == "TRIGGER_POLLUTION_ALERT")
+                    {
+                        error = string.Empty;
+                        return true;
+                    }
+                    if (cmd == "CALIBRATE")
+                    {
+                        error = string.Empty;
+                        return true;
+                    }
+                    error = $"Lệnh '{command}' không được hỗ trợ cho cảm biến môi trường.";
+                    return false;
+
+                case "meter":
+                    if (cmd == "RESET_ENERGY" || cmd == "RESET_KWH")
+                    {
+                        error = string.Empty;
+                        return true;
+                    }
+                    if (cmd == "SET_LOAD" || cmd == "SET_POWER")
+                    {
+                        if (!parameters.TryGetValue("power_watt", out var pVal) &&
+                            !parameters.TryGetValue("load_watt", out pVal) ||
+                            !double.TryParse(Convert.ToString(pVal, CultureInfo.InvariantCulture), out var pwr) ||
+                            pwr < 0 || pwr > 10000)
+                        {
+                            error = "power_watt/load_watt phải là số trong khoảng 0..10000W.";
+                            return false;
+                        }
+                        error = string.Empty;
+                        return true;
+                    }
+                    if (cmd == "TRIGGER_OVERLOAD")
+                    {
+                        error = string.Empty;
+                        return true;
+                    }
+                    error = $"Lệnh '{command}' không được hỗ trợ cho đồng hồ đo điện.";
+                    return false;
+
+                default:
+                    error = $"Thiết bị loại '{deviceType}' chưa hỗ trợ lệnh điều khiển.";
+                    return false;
             }
-
-            error = $"Lệnh '{command}' không được hỗ trợ cho đèn thông minh.";
-            return false;
         }
 
         public static bool TryParseUtcTimestamp(string value, out DateTimeOffset timestamp)
