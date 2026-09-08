@@ -38,6 +38,7 @@ namespace UDM_21.Dashboard
                 _historyManager.AddTelemetry;
 
             DgDevices.ItemsSource = _devices;
+            IcDeviceCards.ItemsSource = _devices;
             CmbDevices.ItemsSource = _devices;
             LbConsole.ItemsSource = _logMessages;
 
@@ -56,7 +57,7 @@ namespace UDM_21.Dashboard
             foreach (var message in savedDevices)
             {
                 MessageValidator.TryParseUtcTimestamp(message.Timestamp, out var timestamp);
-                _devices.Add(new DeviceItem
+                var item = new DeviceItem
                 {
                     DeviceId = message.DeviceId,
                     DeviceType = message.DeviceType,
@@ -65,9 +66,10 @@ namespace UDM_21.Dashboard
                     LastSeen = timestamp == default
                         ? message.Timestamp
                         : timestamp.ToLocalTime().ToString("G"),
-                    RawTelemetryData = message.Data,
                     LatestTelemetrySummary = message.DataJson
-                });
+                };
+                item.UpdateTelemetryData(message.Data);
+                _devices.Add(item);
             }
 
             LogConsole($"[HISTORY] SQLite: {_historyManager.DatabasePath}");
@@ -189,7 +191,7 @@ namespace UDM_21.Dashboard
                 dev.Location = msg.Location;
                 dev.IsOnline = true;
                 dev.LastSeen = DateTime.Now.ToString("T");
-                dev.RawTelemetryData = msg.Data;
+                dev.UpdateTelemetryData(msg.Data);
 
                 var history =
                     _historyManager.GetHistory(msg.DeviceId);
@@ -390,6 +392,133 @@ namespace UDM_21.Dashboard
             AppLogger.Info("DASHBOARD_EVENT", message);
         }
 
+        private void CmbDevices_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (CmbDevices.SelectedItem is not DeviceItem selected) return;
+
+            // Tự động load danh sách mẫu lệnh tương ứng cho từng loại thiết bị
+            UpdatePresetCommandsForDevice(selected);
+        }
+
+        private void UpdatePresetCommandsForDevice(DeviceItem dev)
+        {
+            CmbPresetCommands.Items.Clear();
+
+            switch (dev.DeviceId)
+            {
+                case "smart_light_01":
+                    CmbPresetCommands.Items.Add(new PresetCommandItem("💡 Bật đèn (ON)", "TOGGLE_POWER", "{\"state\": \"ON\"}"));
+                    CmbPresetCommands.Items.Add(new PresetCommandItem("💡 Tắt đèn (OFF)", "TOGGLE_POWER", "{\"state\": \"OFF\"}"));
+                    CmbPresetCommands.Items.Add(new PresetCommandItem("💡 Đảo trạng thái đèn", "TOGGLE_POWER", "{}"));
+                    CmbPresetCommands.Items.Add(new PresetCommandItem("☀️ Độ sáng tối đa (100%)", "SET_BRIGHTNESS", "{\"brightness\": 100}"));
+                    CmbPresetCommands.Items.Add(new PresetCommandItem("🔅 Độ sáng vừa (50%)", "SET_BRIGHTNESS", "{\"brightness\": 50}"));
+                    CmbPresetCommands.Items.Add(new PresetCommandItem("🌑 Tắt độ sáng (0%)", "SET_BRIGHTNESS", "{\"brightness\": 0}"));
+                    break;
+
+                case "door_sensor_01":
+                    CmbPresetCommands.Items.Add(new PresetCommandItem("🚪 Mở cửa (OPEN)", "OPEN_DOOR", "{}"));
+                    CmbPresetCommands.Items.Add(new PresetCommandItem("🚪 Đóng cửa (CLOSED)", "CLOSE_DOOR", "{}"));
+                    CmbPresetCommands.Items.Add(new PresetCommandItem("🚪 Đảo trạng thái cửa", "TOGGLE_DOOR", "{}"));
+                    CmbPresetCommands.Items.Add(new PresetCommandItem("🚨 Kích hoạt cảnh báo cạy phá", "TRIGGER_ALARM", "{}"));
+                    CmbPresetCommands.Items.Add(new PresetCommandItem("🛡️ Hủy cảnh báo cạy phá", "CLEAR_ALARM", "{}"));
+                    break;
+
+                case "temp_hum_01":
+                    CmbPresetCommands.Items.Add(new PresetCommandItem("❄️ Đặt nhiệt độ mát (22°C)", "SET_TEMPERATURE", "{\"temperature\": 22.0}"));
+                    CmbPresetCommands.Items.Add(new PresetCommandItem("🌡️ Đặt nhiệt độ phòng (28°C)", "SET_TEMPERATURE", "{\"temperature\": 28.0}"));
+                    CmbPresetCommands.Items.Add(new PresetCommandItem("🔥 Thử nghiệm quá nhiệt (52°C)", "SET_TEMPERATURE", "{\"temperature\": 52.0}"));
+                    CmbPresetCommands.Items.Add(new PresetCommandItem("🚨 Kích hoạt cảnh báo nhiệt độ cao", "TRIGGER_HEAT_ALERT", "{}"));
+                    CmbPresetCommands.Items.Add(new PresetCommandItem("⚖️ Hiệu chuẩn cảm biến (Calibrate)", "CALIBRATE", "{}"));
+                    break;
+
+                case "air_quality_01":
+                    CmbPresetCommands.Items.Add(new PresetCommandItem("🍃 Bật lọc khí (AQI 35 - Tốt)", "PURIFY_AIR", "{}"));
+                    CmbPresetCommands.Items.Add(new PresetCommandItem("🏭 Giả lập ô nhiễm nhẹ (AQI 85)", "SET_AQI", "{\"aqi\": 85.0}"));
+                    CmbPresetCommands.Items.Add(new PresetCommandItem("☣️ Giả lập ô nhiễm nặng (AQI 180)", "SET_AQI", "{\"aqi\": 180.0}"));
+                    CmbPresetCommands.Items.Add(new PresetCommandItem("🚨 Kích hoạt cảnh báo chất lượng xấu", "TRIGGER_POLLUTION_ALERT", "{}"));
+                    break;
+
+                case "power_meter_01":
+                    CmbPresetCommands.Items.Add(new PresetCommandItem("⚡ Đặt tải thông thường (500W)", "SET_LOAD", "{\"power_watt\": 500.0}"));
+                    CmbPresetCommands.Items.Add(new PresetCommandItem("⚡ Đặt tải cao (2000W)", "SET_LOAD", "{\"power_watt\": 2000.0}"));
+                    CmbPresetCommands.Items.Add(new PresetCommandItem("🔥 Giả lập quá tải lưới (>3500W)", "TRIGGER_OVERLOAD", "{}"));
+                    CmbPresetCommands.Items.Add(new PresetCommandItem("🔄 Reset điện năng (0 kWh)", "RESET_ENERGY", "{}"));
+                    break;
+
+                default:
+                    CmbPresetCommands.Items.Add(new PresetCommandItem("Gửi lệnh tùy chỉnh", "TOGGLE_POWER", "{}"));
+                    break;
+            }
+
+            if (CmbPresetCommands.Items.Count > 0)
+            {
+                CmbPresetCommands.SelectedIndex = 0;
+            }
+        }
+
+        private void CmbPresetCommands_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (CmbPresetCommands.SelectedItem is PresetCommandItem preset)
+            {
+                TxtCommand.Text = preset.Command;
+                TxtParams.Text = preset.ParamsJson;
+            }
+        }
+
+        private async void QuickToggle_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is not Button btn || btn.Tag is not DeviceItem dev) return;
+
+            string cmdName = "TOGGLE_POWER";
+            var cmdParams = new Dictionary<string, object>();
+
+            switch (dev.DeviceId)
+            {
+                case "smart_light_01":
+                    string curLight = "OFF";
+                    if (dev.RawTelemetryData.TryGetValue("state", out var st))
+                    {
+                        curLight = st?.ToString()?.ToUpperInvariant() ?? "OFF";
+                    }
+                    string newLight = curLight == "ON" ? "OFF" : "ON";
+                    cmdName = "TOGGLE_POWER";
+                    cmdParams["state"] = newLight;
+                    break;
+
+                case "door_sensor_01":
+                    cmdName = "TOGGLE_DOOR";
+                    break;
+
+                case "temp_hum_01":
+                    cmdName = "TRIGGER_HEAT_ALERT";
+                    break;
+
+                case "air_quality_01":
+                    cmdName = "PURIFY_AIR";
+                    break;
+
+                case "power_meter_01":
+                    cmdName = "RESET_ENERGY";
+                    break;
+            }
+
+            try
+            {
+                await _mqttController.SendCommandAsync(
+                    dev.Location,
+                    dev.DeviceType,
+                    dev.DeviceId,
+                    cmdName,
+                    cmdParams);
+
+                LogConsole($"[QUICK CMD] Đã gửi lệnh {cmdName} tới {dev.DeviceId}");
+            }
+            catch (Exception ex)
+            {
+                ShowError($"Không thể gửi lệnh nhanh: {ex.Message}");
+            }
+        }
+
         private void DgDevices_MouseDoubleClick(object sender, MouseButtonEventArgs e)
         {
             if (DgDevices.SelectedItem is not DeviceItem device) return;
@@ -429,5 +558,21 @@ namespace UDM_21.Dashboard
         {
             MessageBox.Show(message, "Lỗi", MessageBoxButton.OK, MessageBoxImage.Error);
         }
+    }
+
+    public class PresetCommandItem
+    {
+        public string DisplayName { get; set; }
+        public string Command { get; set; }
+        public string ParamsJson { get; set; }
+
+        public PresetCommandItem(string displayName, string command, string paramsJson)
+        {
+            DisplayName = displayName;
+            Command = command;
+            ParamsJson = paramsJson;
+        }
+
+        public override string ToString() => DisplayName;
     }
 }
