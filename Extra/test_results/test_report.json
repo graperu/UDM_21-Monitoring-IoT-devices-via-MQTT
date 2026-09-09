@@ -1,0 +1,188 @@
+{
+  "timestamp": "2026-09-06 14:12:42",
+  "broker": "broker.emqx.io:1883",
+  "test_cases": {
+    "TC1_5_Devices_Online": {
+      "description": "5/5 Thiết bị IoT gửi trạng thái Online qua LWT Retained topic",
+      "passed": true,
+      "details": "5/5 thiết bị đã báo online",
+      "devices_found": [
+        "air_quality_01",
+        "smart_light_01",
+        "power_meter_01",
+        "door_sensor_01",
+        "temp_hum_01"
+      ]
+    },
+    "TC2_Telemetry_Data_Format": {
+      "description": "Dữ liệu Telemetry có đầy đủ MessageId GUID, Timestamp UTC và Data JSON",
+      "passed": true,
+      "details": "Đã nhận telemetry từ 5/5 thiết bị",
+      "samples": {
+        "temp_hum_01": {
+          "message_id": "e85ff714-b6ad-4c16-8646-d651b8c36a1a",
+          "device_id": "temp_hum_01",
+          "device_type": "sensor",
+          "location": "lab",
+          "timestamp": "2026-09-06T07:13:16.8260620Z",
+          "data": {
+            "temperature": 29.18,
+            "humidity": 64.6,
+            "unit_temp": "°C",
+            "unit_hum": "%"
+          }
+        },
+        "air_quality_01": {
+          "message_id": "f5bcebf4-3b0d-402f-8e49-9491bd8ee553",
+          "device_id": "air_quality_01",
+          "device_type": "sensor",
+          "location": "factory",
+          "timestamp": "2026-09-06T07:13:15.5838246Z",
+          "data": {
+            "aqi": 88.6,
+            "co2_ppm": 421.9,
+            "air_status": "GOOD"
+          }
+        },
+        "power_meter_01": {
+          "message_id": "ad52566d-a9d4-4d0a-bfdc-61c97d7d8761",
+          "device_id": "power_meter_01",
+          "device_type": "meter",
+          "location": "home",
+          "timestamp": "2026-09-06T07:13:16.3918552Z",
+          "data": {
+            "voltage_v": 218.1,
+            "current_a": 4.48,
+            "power_watt": 977.1,
+            "total_kwh": 120.01
+          }
+        },
+        "smart_light_01": {
+          "message_id": "44980dd6-e7f3-46cd-8c2d-efffdf358bc4",
+          "device_id": "smart_light_01",
+          "device_type": "light",
+          "location": "home",
+          "timestamp": "2026-09-06T07:13:15.3548768Z",
+          "data": {
+            "state": "ON",
+            "brightness": 80,
+            "power_draw_w": 12.0
+          }
+        },
+        "door_sensor_01": {
+          "message_id": "9db081b0-0509-48ab-b2b4-b0e38cbe7854",
+          "device_id": "door_sensor_01",
+          "device_type": "security",
+          "location": "lab",
+          "timestamp": "2026-09-06T07:13:16.1282067Z",
+          "data": {
+            "door_state": "OPEN",
+            "battery_pct": 98,
+            "tamper_alert": false
+          }
+        }
+      }
+    },
+    "TC3_Command_Execution_SmartLight": {
+      "description": "Thiết bị smart_light_01 nhận lệnh TOGGLE_POWER và phản hồi state=ON tức thì",
+      "passed": true,
+      "details": {
+        "message_id": "44980dd6-e7f3-46cd-8c2d-efffdf358bc4",
+        "device_id": "smart_light_01",
+        "device_type": "light",
+        "location": "home",
+        "timestamp": "2026-09-06T07:13:15.3548768Z",
+        "data": {
+          "state": "ON",
+          "brightness": 80,
+          "power_draw_w": 12.0
+        }
+      }
+    },
+    "TC4_Anomaly_Detection_Alert": {
+      "description": "Thiết bị temp_hum_01 phát số liệu bất thường (> 40°C) để kích hoạt cảnh báo",
+      "passed": true,
+      "details": [
+        {
+          "device": "temp_hum_01",
+          "temp": 52.14,
+          "payload": {
+            "message_id": "341ecbfb-321a-4681-bc5b-79bda3bdc94b",
+            "device_id": "temp_hum_01",
+            "device_type": "sensor",
+            "location": "lab",
+            "timestamp": "2026-09-06T07:12:58.7798203Z",
+            "data": {
+              "temperature": 52.14,
+              "humidity": 67.27,
+              "unit_temp": "°C",
+              "unit_hum": "%"
+            }
+          }
+        },
+        {
+          "device": "temp_hum_01",
+          "temp": 51.89,
+          "payload": {
+            "message_id": "c16e75ca-d9d4-4057-a655-5b97d9b2fc3f",
+            "device_id": "temp_hum_01",
+            "device_type": "sensor",
+            "location": "lab",
+            "timestamp": "2026-09-06T07:13:13.8198432Z",
+            "data": {
+              "temperature": 51.89,
+              "humidity": 63.86,
+              "unit_temp": "°C",
+              "unit_hum": "%"
+            }
+          }
+        }
+      ]
+    },
+    "TC5_Stress_Test_Performance": {
+      "description": "Đo đạc Throughput và Latency ở 2 mức tải: 500 msgs và 2000 msgs",
+      "passed": true,
+      "results": {
+        "Muc_1_Tai_Nhe_500_msgs": {
+          "total_sent": 500,
+          "acked_count": 500,
+          "duration_sec": 8.025,
+          "throughput_msg_sec": 62.3,
+          "avg_latency_ms": 16.05,
+          "success_rate_pct": 100.0
+        },
+        "Muc_2_Tai_Nang_2000_msgs": {
+          "total_sent": 2000,
+          "acked_count": 2000,
+          "duration_sec": 15.029,
+          "throughput_msg_sec": 62.28,
+          "avg_latency_ms": 7.51,
+          "success_rate_pct": 100.0
+        }
+      }
+    }
+  },
+  "summary": {
+    "total": 5,
+    "passed": 5,
+    "failed": 0
+  },
+  "stress_test": {
+    "Muc_1_Tai_Nhe_500_msgs": {
+      "total_sent": 500,
+      "acked_count": 500,
+      "duration_sec": 8.025,
+      "throughput_msg_sec": 62.3,
+      "avg_latency_ms": 16.05,
+      "success_rate_pct": 100.0
+    },
+    "Muc_2_Tai_Nang_2000_msgs": {
+      "total_sent": 2000,
+      "acked_count": 2000,
+      "duration_sec": 15.029,
+      "throughput_msg_sec": 62.28,
+      "avg_latency_ms": 7.51,
+      "success_rate_pct": 100.0
+    }
+  }
+}

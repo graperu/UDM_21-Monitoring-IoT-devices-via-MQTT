@@ -34,50 +34,67 @@
                 <ColumnDefinition Width="2*"/>
             </Grid.ColumnDefinitions>
 
-            <!-- Left: Device DataGrid -->
-            <GroupBox Header="Danh Sách Thiết Bị &amp; Dữ Liệu Real-Time" Grid.Column="0" Margin="0,0,5,0">
-                <DataGrid x:Name="DgDevices" AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False">
-                    <DataGrid.Columns>
-                        <DataGridTextColumn Header="Device ID" Binding="{Binding DeviceId}" Width="120"/>
-                        <DataGridTextColumn Header="Loại" Binding="{Binding DeviceType}" Width="80"/>
-                        <DataGridTextColumn Header="Vị Trí" Binding="{Binding Location}" Width="80"/>
-                        <DataGridTemplateColumn Header="Trạng thái" Width="120">
-                            <DataGridTemplateColumn.CellTemplate>
-                                <DataTemplate>
-                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="5,0">
+            <!-- Left: Device DataGrid & Telemetry History -->
+            <Grid Grid.Column="0" Margin="0,0,5,0">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="3*"/>
+                    <RowDefinition Height="2*"/>
+                </Grid.RowDefinitions>
 
-                                        <TextBlock Text="{Binding StatusText}" VerticalAlignment="Center"/>
+                <!-- Top Left: Device List -->
+                <GroupBox Header="Danh Sách Thiết Bị &amp; Dữ Liệu Real-Time" Grid.Row="0" Margin="0,0,0,5">
+                    <DataGrid x:Name="DgDevices" AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" SelectionChanged="DgDevices_SelectionChanged">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Device ID" Binding="{Binding DeviceId}" Width="120"/>
+                            <DataGridTextColumn Header="Loại" Binding="{Binding DeviceType}" Width="80"/>
+                            <DataGridTextColumn Header="Vị Trí" Binding="{Binding Location}" Width="80"/>
+                            <DataGridTemplateColumn Header="Trạng thái" Width="120">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="5,0">
+                                            <TextBlock Text="{Binding StatusText}" VerticalAlignment="Center"/>
+                                            <Ellipse Width="8" Height="8" Margin="6,0,0,0" VerticalAlignment="Center">
+                                                <Ellipse.Style>
+                                                    <Style TargetType="Ellipse">
+                                                        <Setter Property="Fill" Value="Gray"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding StatusText}" Value="Online">
+                                                                <Setter Property="Fill" Value="LimeGreen"/>
+                                                            </DataTrigger>
+                                                            <DataTrigger Binding="{Binding StatusText}" Value="⚠️ Cảnh báo">
+                                                                <Setter Property="Fill" Value="OrangeRed"/>
+                                                            </DataTrigger>
+                                                            <DataTrigger Binding="{Binding StatusText}" Value="Offline">
+                                                                <Setter Property="Fill" Value="Red"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Ellipse.Style>
+                                            </Ellipse>
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                            <DataGridTextColumn Header="Tóm Tắt Dữ Liệu" Binding="{Binding LatestTelemetrySummary}" Width="*"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </GroupBox>
 
-                                        <Ellipse Width="8" Height="8" Margin="6,0,0,0" VerticalAlignment="Center">
-                                            <Ellipse.Style>
-                                                <Style TargetType="Ellipse">
-                                                    <Setter Property="Fill" Value="Gray"/>
-
-                                                    <Style.Triggers>
-                                                        <DataTrigger Binding="{Binding StatusText}" Value="Online">
-                                                            <Setter Property="Fill" Value="LimeGreen"/>
-                                                        </DataTrigger>
-
-                                                        <DataTrigger Binding="{Binding StatusText}" Value="⚠️ Cảnh báo">
-                                                            <Setter Property="Fill" Value="OrangeRed"/>
-                                                        </DataTrigger>
-
-                                                        <DataTrigger Binding="{Binding StatusText}" Value="Offline">
-                                                            <Setter Property="Fill" Value="Red"/>
-                                                        </DataTrigger>
-                                                    </Style.Triggers>
-                                                </Style>
-                                            </Ellipse.Style>
-                                        </Ellipse>
-
-                                    </StackPanel>
-                                </DataTemplate>
-                            </DataGridTemplateColumn.CellTemplate>
-                        </DataGridTemplateColumn>
-                        <DataGridTextColumn Header="Tóm Tắt Dữ Liệu" Binding="{Binding LatestTelemetrySummary}" Width="*"/>
-                    </DataGrid.Columns>
-                </DataGrid>
-            </GroupBox>
+                <!-- Bottom Left: Telemetry History DataGrid -->
+                <GroupBox Header="Lịch Sử Dữ Liệu Telemetry" Grid.Row="1" Margin="0,5,0,0">
+                    <DataGrid x:Name="DgHistory" AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Mã Bản Tin" Binding="{Binding MessageId}" Width="100"/>
+                            <DataGridTextColumn Header="Device ID" Binding="{Binding DeviceId}" Width="110"/>
+                            <DataGridTextColumn Header="Loại" Binding="{Binding DeviceType}" Width="80"/>
+                            <DataGridTextColumn Header="Vị Trí" Binding="{Binding Location}" Width="80"/>
+                            <DataGridTextColumn Header="Thời Gian" Binding="{Binding Timestamp}" Width="130"/>
+                            <!-- Sửa Binding thành DataJson để không bị hiện lỗi (Collection) -->
+                            <DataGridTextColumn Header="Dữ Liệu Telemetry" Binding="{Binding DataJson}" Width="*"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </GroupBox>
+            </Grid>
 
             <!-- Right: Control Panel & Console -->
             <Grid Grid.Column="1" Margin="5,0,0,0">
@@ -105,13 +122,13 @@
                 <!-- Nhật Ký Sự Kiện (Log Console) -->
                 <GroupBox Header="Log Console" Grid.Row="1" VerticalAlignment="Stretch">
                     <ListBox x:Name="LbConsole"
-                                 Background="#1E1E1E" 
-                                 Foreground="#00FF00" 
-                                 FontFamily="Consolas"
-                                 BorderBrush="Transparent"
-                                 VerticalAlignment="Stretch"
-                                 ScrollViewer.VerticalScrollBarVisibility="Auto"
-                                 MaxHeight="{Binding Path=ActualHeight, RelativeSource={RelativeSource AncestorType=Window}}">
+                             Background="#1E1E1E" 
+                             Foreground="#00FF00" 
+                             FontFamily="Consolas"
+                             BorderBrush="Transparent"
+                             VerticalAlignment="Stretch"
+                             ScrollViewer.VerticalScrollBarVisibility="Auto"
+                             MaxHeight="{Binding Path=ActualHeight, RelativeSource={RelativeSource AncestorType=Window}}">
                         <ListBox.Resources>
                             <!-- Template Vertical ScrollBar -->
                             <ControlTemplate x:Key="VerticalScrollBarTemplate" TargetType="ScrollBar">
@@ -122,9 +139,9 @@
                                                 <Thumb.Template>
                                                     <ControlTemplate TargetType="Thumb">
                                                         <Border x:Name="ThumbBorder" 
-                                                Background="#4E4E4E" 
-                                                CornerRadius="4" 
-                                                Margin="1"/>
+                                                                Background="#4E4E4E" 
+                                                                CornerRadius="4" 
+                                                                Margin="1"/>
                                                         <ControlTemplate.Triggers>
                                                             <Trigger Property="IsMouseOver" Value="True">
                                                                 <Setter TargetName="ThumbBorder" Property="Background" Value="#6E6E6E"/>
@@ -138,7 +155,7 @@
                                 </Grid>
                             </ControlTemplate>
 
-                            <!-- 2. Template Horizontal ScrollBar -->
+                            <!-- Template Horizontal ScrollBar -->
                             <ControlTemplate x:Key="HorizontalScrollBarTemplate" TargetType="ScrollBar">
                                 <Grid x:Name="Bg" Background="Transparent">
                                     <Track x:Name="PART_Track" IsDirectionReversed="False">
@@ -147,9 +164,9 @@
                                                 <Thumb.Template>
                                                     <ControlTemplate TargetType="Thumb">
                                                         <Border x:Name="ThumbBorder" 
-                                                Background="#4E4E4E" 
-                                                CornerRadius="4" 
-                                                Margin="1"/>
+                                                                Background="#4E4E4E" 
+                                                                CornerRadius="4" 
+                                                                Margin="1"/>
                                                         <ControlTemplate.Triggers>
                                                             <Trigger Property="IsMouseOver" Value="True">
                                                                 <Setter TargetName="ThumbBorder" Property="Background" Value="#6E6E6E"/>
@@ -163,18 +180,15 @@
                                 </Grid>
                             </ControlTemplate>
 
-                            <!-- Phân loại Template ngang, dọc-->
                             <Style TargetType="ScrollBar">
                                 <Setter Property="Background" Value="Transparent"/>
                                 <Setter Property="Stylus.IsPressAndHoldEnabled" Value="False"/>
                                 <Setter Property="Stylus.IsFlicksEnabled" Value="False"/>
                                 <Style.Triggers>
-                                    <!-- Template riêng cho thanh Dọc -->
                                     <Trigger Property="Orientation" Value="Vertical">
                                         <Setter Property="Width" Value="4"/>
                                         <Setter Property="Template" Value="{StaticResource VerticalScrollBarTemplate}"/>
                                     </Trigger>
-                                    <!-- Template riêng cho thanh Ngang -->
                                     <Trigger Property="Orientation" Value="Horizontal">
                                         <Setter Property="Height" Value="4"/>
                                         <Setter Property="Template" Value="{StaticResource HorizontalScrollBarTemplate}"/>
@@ -185,16 +199,15 @@
                         <ListBox.ItemTemplate>
                             <DataTemplate>
                                 <TextBox x:Name="TxtConsole"
-                                             Text="{Binding Mode=OneWay}" 
-                                             IsReadOnly="True"
-                                             SelectionBrush="#007ACC"
-                                             Background="Transparent"
-                                             Foreground="#00FF00"
-                                             Padding="0"
-                                             BorderThickness="0"/>
+                                         Text="{Binding Mode=OneWay}" 
+                                         IsReadOnly="True"
+                                         SelectionBrush="#007ACC"
+                                         Background="Transparent"
+                                         Foreground="#00FF00"
+                                         Padding="0"
+                                         BorderThickness="0"/>
                             </DataTemplate>
                         </ListBox.ItemTemplate>
-                        <!-- ItemContainerStyle Style lại viền của listBox-->
                         <ListBox.ItemContainerStyle>
                             <Style TargetType="ListBoxItem">
                                 <Setter Property="Padding" Value="2,1"/>

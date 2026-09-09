@@ -33,7 +33,7 @@ namespace UDM_21.Dashboard.Controllers
             _mqtt.MessageReceivedAsync += OnMessageReceivedAsync;
         }
 
-        public async Task ConnectAsync(string host = "localhost", int port = 1883)
+        public async Task ConnectAsync(string host = "broker.emqx.io", int port = 1883)
         {
             ConnectionStatusChanged?.Invoke(false, "Đang kết nối MQTT Broker...");
             await _mqtt.ConnectAsync(host, port);
