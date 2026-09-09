@@ -8,6 +8,17 @@ namespace UDM_21.Dashboard.Controllers
 {
     public sealed class MqttController : IAsyncDisposable
     {
+        // Cache phát hiện message trùng
+        private static readonly HashSet<string> ProcessedMessages = new();
+
+        // Lưu thứ tự message để giới hạn 100 bản tin gần nhất
+        
+        private static readonly Queue<string> MessageQueue = new();
+
+        private const int MaxCacheSize = 100;
+        // Lưu timestamp mới nhất của từng thiết bị
+        private static readonly Dictionary<string, DateTime> LastTimestampByDevice = new();
+
         private readonly MqttHelper _mqtt;
         private readonly TelemetryMessageFilter _telemetryFilter = new TelemetryMessageFilter(100);
         private readonly MessageDeduplicator _statusDeduplicator = new MessageDeduplicator(100);
@@ -168,16 +179,83 @@ namespace UDM_21.Dashboard.Controllers
             TelemetryReceived?.Invoke(message);
         }
 
-        private void HandleStatus(string topic, string payload)
+        private Task OnMessageReceivedAsync(
+            string topic,
+            string payload,
+            MQTTnet.Protocol.MqttQualityOfServiceLevel qos,
+            bool retain)
+        
         {
             if (!MessageValidator.TryParseStatus(payload, out var status, out var error) || status == null)
             {
+                var msg = TelemetryMessage.FromJson(payload);
+
+                if (msg != null)
+                {
+                    if (string.IsNullOrWhiteSpace(msg.MessageId))
+                        {
+                            Console.WriteLine(
+                                "[MQTT] Invalid message: missing message_id");
+
+                            return Task.CompletedTask;
+                        }
+                    // =====================
+                    // DEDUPLICATION
+                    // =====================
+
+                    if (ProcessedMessages.Contains(msg.MessageId))
+                    {
+                        Console.WriteLine(
+                            $"[MQTT] Duplicate message ignored: {msg.MessageId}");
+
+                        return Task.CompletedTask;
+                    }
+
+                    // Thêm message mới vào cache
+                    ProcessedMessages.Add(msg.MessageId);
+                    MessageQueue.Enqueue(msg.MessageId);
+
+                    // Chỉ giữ lại 100 message gần nhất
+                    if (MessageQueue.Count > MaxCacheSize)
+                    {
+                        string oldestMessageId = MessageQueue.Dequeue();
+                        ProcessedMessages.Remove(oldestMessageId);
+                    }
+
+                    // =====================
+                    // OUT OF ORDER
+                    // =====================
+
+                    if (DateTime.TryParse(
+                        msg.Timestamp,
+                        out DateTime currentTimestamp))
+                    {
+                        if (LastTimestampByDevice.TryGetValue(
+                            msg.DeviceId,
+                            out DateTime lastTimestamp))
+                        {
+                            if (currentTimestamp < lastTimestamp)
+                            {
+                                Console.WriteLine(
+                                    $"[MQTT] Out-of-order message ignored. Device={msg.DeviceId}");
+
+                                return Task.CompletedTask;
+                            }
+                        }
+
+                        LastTimestampByDevice[msg.DeviceId]
+                            = currentTimestamp;
+                    }
+
+                    TelemetryReceived?.Invoke(msg);
+                }
                 Reject(error);
                 return;
             }
 
             if (!MessageValidator.ValidateTopic(topic, "status", status.DeviceId, null, null, out error, _topicRoot))
             {
+               
                 Reject(error);
                 return;
             }
