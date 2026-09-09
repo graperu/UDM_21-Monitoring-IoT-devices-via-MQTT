@@ -1,81 +1,107 @@
-# BÁO CÁO CẬP NHẬT & TỐI ƯU HỆ THỐNG GIÁM SÁT IoT QUA MQTT (UDM_21)
+# BÁO CÁO CẬP NHẬT HỆ THỐNG UDM_21
 
-**Dự án:** Giám sát & Điều khiển Thiết bị IoT Qua Giao Thức MQTT (C# .NET 8 WPF)  
-**Ngày cập nhật:** 09/08/2026  
-**Người thực hiện:** Antigravity AI & Nhóm Phát Triển UDM_21  
+**Đề tài:** Giám sát và điều khiển thiết bị IoT qua MQTT
 
----
+**Nền tảng:** C# .NET 8, WPF, MQTTnet, SQLite
 
-## 📑 1. TỔNG QUAN CÁC HẠNG MỤC ĐÃ THỰC HIỆN
+**Ngày kiểm tra:** 07/09/2026
 
-Trong đợt cập nhật này, hệ thống đã được đồng bộ mã nguồn mới nhất từ GitHub repository, kiểm tra biên dịch toàn bộ solution, đồng thời bổ sung 3 tính năng quan trọng phục vụ cho việc kiểm thử tính năng nâng cao và đảm bảo tính ổn định khi chạy thực tế.
+## 1. Phạm vi cập nhật
 
----
+Đợt cập nhật hoàn thiện bốn hạn chế của phiên bản trước:
 
-## 🛠️ 2. CHI TIẾT CÁC NÂNG CẤP MÃ NGUỒN
+1. Lịch sử telemetry không còn mất khi đóng Dashboard.
+2. Kết nối MQTT hỗ trợ TLS và username/password cấu hình được.
+3. Topic có namespace riêng, tránh nhận nhầm message trên broker công cộng.
+4. Simulator có thể chạy cả năm thiết bị trong một tiến trình hoặc mỗi thiết bị trong tiến trình riêng.
 
-### 2.1. Nâng cấp Giả lập Thiết bị & Cấu hình CLI (`Simulators`)
-- **Tệp thay đổi:** `Code/Simulators/Program.cs`
-- **Nội dung:** Cho phép truyền trực tiếp địa chỉ MQTT Broker (`host`) và cổng (`port`) từ tham số dòng lệnh CLI.
-- **Lợi ích:** Dễ dàng chuyển đổi giữa Broker nội bộ (`localhost:1883`) và Broker công cộng (`broker.emqx.io:1883`) khi chạy câu lệnh:
-  ```bash
-  dotnet run --project Code/Simulators/Simulators.csproj broker.emqx.io 1883
-  ```
+## 2. Nội dung thực hiện
 
----
+### 2.1. Topic và bảo mật kết nối
 
-### 2.2. Giả lập Cảnh báo Bất thường & Xử lý Ngưỡng An toàn (`Alert & Anomaly Detection`)
-- **Tệp thay đổi:**
-  - `Code/Simulators/devices/TempHumidityDevice.cs`
-  - `Code/Dashboard/models/DeviceItem.cs`
-  - `Code/Dashboard/MainWindow.xaml`
-  - `Code/Dashboard/MainWindow.xaml.cs`
-- **Nội dung cải tiến:**
-  1. **Thiết bị Nhiệt độ (`temp_hum_01`):** Định kỳ mỗi 5 chu kỳ phát dữ liệu (~15 giây), thiết bị sẽ phát 1 giá trị nhiệt độ tăng đột biến ($48.5^\circ\text{C} - 54.5^\circ\text{C} > 40^\circ\text{C}$).
-  2. **Dashboard WPF:**
-     - Phân tích tự động payload Telemetry nhận được. Nếu `temperature > 40°C`, `power_watt > 3000W` hoặc `aqi > 150`, Dashboard xuất cảnh báo đỏ:
-       `🚨 [CẢNH BÁO BẤT THƯỜNG] temp_hum_01: Nhiệt độ vượt ngưỡng: 52.19°C (> 40°C)`
-     - Cập nhật trạng thái hiển thị trên DataGrid thành **`⚠️ Cảnh báo`** đi kèm chấm đèn chỉ thị màu đỏ cam (`OrangeRed`).
+- Topic mặc định: `udm21_nhom01/{location}/{device_type}/{device_id}/{kind}`.
+- Dashboard subscribe bằng wildcard dưới đúng `topic_root` đã cấu hình.
+- Dashboard có ô Host, Port, Topic Root, TLS, Username và Password.
+- MQTTnet xác thực chứng chỉ broker bằng trust store của hệ điều hành.
+- Simulator nhận password qua biến môi trường, không ghi secret vào source hoặc log.
+- Có cấu hình Mosquitto local chỉ lắng nghe `127.0.0.1` để demo không phụ thuộc Internet.
 
----
+Commit triển khai: `9ce37e9 feat: isolate mqtt topics and secure broker connections`.
 
-### 2.3. Phản hồi Lệnh Điều khiển Real-Time (`Command ACK & State Reflection`)
-- **Tệp thay đổi:** `Code/Simulators/devices/SmartLightDevice.cs`
-- **Nội dung cải tiến:**
-  - Khi ứng dụng Dashboard gửi lệnh điều khiển (như `TOGGLE_POWER` với `{"state": "ON"}`/`{"state": "OFF"}` hoặc `SET_BRIGHTNESS`), thiết bị `smart_light_01` sẽ:
-    1. Cập nhật biến trạng thái thực tế trong bộ nhớ.
-    2. Xuất log xác nhận phản hồi lệnh trên Console: `[Device smart_light_01] 💡 PHẢN HỒI LỆNH: Đèn đã thực sự BẬT (Độ sáng: 80%)!`.
-    3. Ngay lập tức Publish 1 gói dữ liệu Telemetry cập nhật về MQTT Broker, giúp giao diện Dashboard phản ánh trạng thái mới **tức thì** mà không cần chờ chu kỳ định kỳ 5 giây.
+### 2.2. Chế độ Simulator đa tiến trình
 
----
+- `--device all`: chạy năm thiết bị trong một tiến trình như trước.
+- `--device <device_id>`: chỉ chạy thiết bị được chọn.
+- Hỗ trợ CLI cho host, port, topic root, TLS, username và tên biến môi trường chứa password.
+- `run-multiprocess.bat` mở năm tiến trình thiết bị riêng và một Dashboard.
 
-### 2.4. Khắc phục Lỗi Xung đột Client ID trên MQTT Broker Công cộng
-- **Tệp thay đổi:**
-  - `Code/Dashboard/controllers/MqttController.cs`
-  - `Code/Simulators/DeviceBase.cs`
-- **Nguyên nhân:** Khi chạy trên MQTT Broker dùng chung (`broker.emqx.io`), việc cố định Client ID làm cho Broker từ chối kết nối (`NotAuthorized`) hoặc ngắt kết nối lẫn nhau giữa các phiên làm việc.
-- **Giải pháp:** Tự động sinh chuỗi định danh duy nhất chứa GUID ngắn cho cả Dashboard (`WpfDashboard_xxxxxx`) và các thiết bị giả lập (`sim_temp_hum_01_xxxx`).
+Commit triển khai: `8d3c554 feat: support per-device simulator processes`.
 
----
+### 2.3. Lịch sử SQLite
 
-## 📊 3. KẾT QUẢ KIỂM THỬ (VERIFICATION RESULTS)
+- Database mặc định: `Extra/data/telemetry.db`.
+- `message_id` là khóa chính để chống lưu trùng sau khi Dashboard restart.
+- Lưu tối đa 10.000 telemetry cho mỗi thiết bị; GUI hiển thị 20 bản gần nhất.
+- Khi khởi động lại, Dashboard nạp thiết bị và telemetry cuối từ database, tạm đánh dấu Offline cho tới khi nhận status mới.
+- Nút xóa lịch sử xóa dữ liệu tương ứng trong SQLite.
 
-1. **Biên dịch Dự án (`dotnet build`):**
-   - **Thành công:** 0 Lỗi (Error), 0 Cảnh báo (Warning).
-2. **Khởi chạy Hệ thống (`dotnet run`):**
-   - **Simulators:** 5/5 thiết bị (`temp_hum_01`, `air_quality_01`, `power_meter_01`, `smart_light_01`, `door_sensor_01`) kết nối và phát dữ liệu real-time lên `broker.emqx.io:1883`.
-   - **Dashboard WPF:** Khởi chạy cửa sở GUI, tự động kết nối và hiển thị liên tục bảng theo dõi thiết bị kèm nhật ký lệnh/cảnh báo.
+Commit triển khai: `477411f feat: persist telemetry history with sqlite`.
 
----
+## 3. Kết quả kiểm thử
 
-## 📌 4. HƯỚNG DẪN KHỞI CHẠY LẠI DỰ ÁN
+### 3.1. Build và kiểm thử tự động
 
-Mở 2 cửa sở Terminal độc lập tại thư mục gốc:
+| Hạng mục | Kết quả |
+|---|---:|
+| Release build | 0 lỗi, 0 cảnh báo |
+| C# unit/integration tests | 19/19 PASS |
+| End-to-end MQTT | 5/5 PASS |
+| Dependency vulnerability scan | Không phát hiện advisory |
 
-```bash
-# Terminal 1: Chạy các thiết bị giả lập IoT (Kết nối Broker công cộng)
-dotnet run --project Code/Simulators/Simulators.csproj broker.emqx.io 1883
+Các test C# bao phủ validation JSON/topic/command, duplicate, out-of-order, authentication đúng/sai, LWT, broker disconnect, reconnect/re-subscribe, SQLite restart, duplicate database và giới hạn 20 bản hiển thị.
 
-# Terminal 2: Chạy ứng dụng Giao diện WPF Dashboard
-dotnet run --project Code/Dashboard/Dashboard.csproj
+### 3.2. Smoke test thực tế
+
+- Kết nối TLS tới `mqtts://broker.emqx.io:8883`: PASS.
+- Chạy riêng `temp_hum_01`/`door_sensor_01` bằng `--device`: PASS.
+- Kết nối, publish online/telemetry, publish offline và đóng tiến trình sạch: PASS.
+
+### 3.3. Performance test qua broker công cộng
+
+| Mức tải | PUBACK | Thời gian | Throughput | RTT trung bình | RTT P95 |
+|---|---:|---:|---:|---:|---:|
+| 500 message QoS 1 | 500/500 | 7,91 giây | 63,22 msg/s | 4.024,83 ms | 7.413,53 ms |
+| 2.000 message QoS 1 | 2.000/2.000 | 27,65 giây | 72,35 msg/s | 14.397,31 ms | 26.357,61 ms |
+
+RTT bao gồm thời gian chờ trong hàng đợi publish QoS 1, không phải chỉ là độ trễ mạng. Dữ liệu gốc và cấu hình máy nằm trong `Extra/test_results/test_report.json`.
+
+## 4. Hướng dẫn chạy
+
+### Chế độ thông thường
+
+```powershell
+run.bat
 ```
+
+### Mỗi thiết bị một tiến trình
+
+```powershell
+run-multiprocess.bat
+```
+
+### Broker local
+
+```powershell
+mosquitto -c Extra/mosquitto/mosquitto.local.conf -v
+```
+
+Sau đó nhập `localhost`, port `1883`, TLS tắt và cùng Topic Root trên Dashboard/Simulator.
+
+## 5. Hạn chế còn lại trước khi nộp môn
+
+- Chưa có file báo cáo Word `.docx` chính thức.
+- Chưa có slide `.pptx` chính thức.
+- Chưa có link video demo thật trong README.
+- TLS/authentication cần broker và tài khoản phù hợp; cấu hình mặc định vẫn dùng dữ liệu giả qua public broker.
+
+Ba mục hồ sơ đầu tiên cần được nhóm hoàn thành và kiểm tra thủ công trước khi nộp.

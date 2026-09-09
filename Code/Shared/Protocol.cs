@@ -4,13 +4,9 @@ using Newtonsoft.Json;
 
 namespace UDM_21.Shared
 {
-    // =========================================================================
-    // TODO (Thành viên 3): ĐIỀU CHỈNH CẤU TRÚC MESSAGE VÀ JSON PROTOCOL
-    // =========================================================================
-
     /// <summary>
     /// Thông điệp dữ liệu cảm biến (Telemetry) thiết bị gửi về Broker
-    /// Topic: iot/{location}/{device_type}/{device_id}/telemetry
+    /// Topic: {topic_root}/{location}/{device_type}/{device_id}/telemetry
     /// </summary>
     public class TelemetryMessage
     {
@@ -45,13 +41,15 @@ namespace UDM_21.Shared
 
         public static TelemetryMessage? FromJson(string json)
         {
-            return JsonConvert.DeserializeObject<TelemetryMessage>(json);
+            return MessageValidator.TryParseTelemetry(json, out var message, out _)
+                ? message
+                : null;
         }
     }
 
     /// <summary>
     /// Thông điệp trạng thái Online/Offline của thiết bị (Sử dụng Last Will & Testament - LWT)
-    /// Topic: iot/{location}/{device_type}/{device_id}/status
+    /// Topic: {topic_root}/{location}/{device_type}/{device_id}/status
     /// </summary>
     public class DeviceStatusMessage
     {
@@ -68,12 +66,13 @@ namespace UDM_21.Shared
         public string Timestamp { get; set; } = DateTime.UtcNow.ToString("o");
 
         public string ToJson() => JsonConvert.SerializeObject(this);
-        public static DeviceStatusMessage? FromJson(string json) => JsonConvert.DeserializeObject<DeviceStatusMessage>(json);
+        public static DeviceStatusMessage? FromJson(string json) =>
+            MessageValidator.TryParseStatus(json, out var message, out _) ? message : null;
     }
 
     /// <summary>
     /// Thông điệp lệnh điều khiển từ Dashboard gửi về thiết bị
-    /// Topic: iot/{location}/{device_type}/{device_id}/cmd
+    /// Topic: {topic_root}/{location}/{device_type}/{device_id}/cmd
     /// </summary>
     public class CommandMessage
     {
@@ -90,6 +89,7 @@ namespace UDM_21.Shared
         public Dictionary<string, object> Params { get; set; } = new Dictionary<string, object>();
 
         public string ToJson() => JsonConvert.SerializeObject(this);
-        public static CommandMessage? FromJson(string json) => JsonConvert.DeserializeObject<CommandMessage>(json);
+        public static CommandMessage? FromJson(string json) =>
+            MessageValidator.TryParseCommand(json, out var message, out _) ? message : null;
     }
 }

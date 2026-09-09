@@ -2,14 +2,21 @@
   "broker": {
     "host": "localhost",
     "port": 1883,
+    "use_tls": false,
     "keepalive": 60,
-    "username": "",
-    "password": ""
+    "username_env": "UDM21_MQTT_USERNAME",
+    "password_env": "UDM21_MQTT_PASSWORD"
   },
   "topics": {
-    "telemetry_wildcard": "iot/+/+/+/telemetry",
-    "status_wildcard": "iot/+/+/+/status",
-    "command_pattern": "iot/{location}/{device_type}/{device_id}/cmd"
+    "root": "udm21_nhom01",
+    "telemetry_wildcard": "udm21_nhom01/+/+/+/telemetry",
+    "status_wildcard": "udm21_nhom01/+/+/+/status",
+    "command_pattern": "udm21_nhom01/{location}/{device_type}/{device_id}/cmd"
+  },
+  "storage": {
+    "database": "Extra/data/telemetry.db",
+    "visible_messages_per_device": 20,
+    "stored_messages_per_device": 10000
   },
   "thresholds": {
     "temperature_max": 40.0,

@@ -1,7 +1,11 @@
 {
   "broker": {
     "host": "localhost",
-    "port": 1883
+    "port": 1883,
+    "use_tls": false,
+    "topic_root": "udm21_nhom01",
+    "username_env": "UDM21_MQTT_USERNAME",
+    "password_env": "UDM21_MQTT_PASSWORD"
   },
   "devices": [
     {
