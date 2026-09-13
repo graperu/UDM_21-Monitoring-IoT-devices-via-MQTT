@@ -107,11 +107,19 @@ namespace UDM_21.Shared
 
             if (_client.IsConnected)
             {
-                using var timeout = CreateTimeout(cancellationToken);
-                var options = new MqttClientDisconnectOptionsBuilder().Build();
-                await _client.DisconnectAsync(options, timeout.Token);
+                try
+                {
+                    using var timeout = CreateTimeout(cancellationToken);
+                    var options = new MqttClientDisconnectOptionsBuilder().Build();
+                    await _client.DisconnectAsync(options, timeout.Token);
+                }
+                catch (Exception ex)
+                {
+                    AppLogger.Error("MQTT_DISCONNECT_FAILED", ex);
+                }
             }
 
+            await InvokeConnectionChangedAsync(false);
             AppLogger.Info("MQTT_DISCONNECT", $"client={ClientId}; manual=true");
         }
 
@@ -132,9 +140,6 @@ namespace UDM_21.Shared
         public void ClearRememberedSubscriptions()
         {
             ThrowIfDisposed();
-            if (_client.IsConnected)
-                throw new InvalidOperationException("Phải ngắt kết nối trước khi thay đổi toàn bộ subscription.");
-
             _subscriptions.Clear();
         }
 
@@ -214,8 +219,20 @@ namespace UDM_21.Shared
 
         private async Task ConnectClientWithTimeoutAsync(CancellationToken cancellationToken)
         {
-            using var timeout = CreateTimeout(cancellationToken);
-            await _client.ConnectAsync(BuildOptions(), timeout.Token);
+            for (var attempt = 0; attempt < 8; attempt++)
+            {
+                try
+                {
+                    using var timeout = CreateTimeout(cancellationToken);
+                    await _client.ConnectAsync(BuildOptions(), timeout.Token);
+                    return;
+                }
+                catch (InvalidOperationException ex) when (ex.Message.Contains("pending", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (attempt == 7) throw;
+                    await Task.Delay(250, cancellationToken);
+                }
+            }
         }
 
         private async Task SubscribeClientAsync(

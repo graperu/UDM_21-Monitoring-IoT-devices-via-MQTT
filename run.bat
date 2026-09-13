@@ -9,6 +9,6 @@ start "1. IoT Simulators (5 Devices)" cmd /k "dotnet run --project Code/Simulato
 ping 127.0.0.1 -n 3 >nul
 echo.
 echo 2. Dang bat giao dien WPF Dashboard...
-start "2. WPF Dashboard GUI" cmd /k "dotnet run --project Code/Dashboard/Dashboard.csproj"
+start "" dotnet run --project Code/Dashboard/Dashboard.csproj
 echo.
 echo [XONG] Da khoi chay xong ca 2 ung dung!

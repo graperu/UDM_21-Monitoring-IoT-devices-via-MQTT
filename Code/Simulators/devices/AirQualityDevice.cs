@@ -68,18 +68,8 @@ namespace UDM_21.Simulators.Devices
 
             if (stateChanged)
             {
-                Console.WriteLine($"[Device {DeviceId}] 🍃 PHẢN HỒI LỆNH: Cập nhật không khí -> AQI {_aqi} | CO2 {_co2}");
-                var data = GenerateTelemetry();
-                var msg = new TelemetryMessage
-                {
-                    MessageId = Guid.NewGuid().ToString(),
-                    DeviceId = DeviceId,
-                    DeviceType = DeviceType,
-                    Location = Location,
-                    Timestamp = DateTime.UtcNow.ToString("o"),
-                    Data = data
-                };
-                await Mqtt.PublishAsync(TelemetryTopic, msg.ToJson(), MQTTnet.Protocol.MqttQualityOfServiceLevel.AtLeastOnce);
+                Console.WriteLine($"[Device {DeviceId}] 🍃 PHẢN HỒI LỆNH: Không khí -> AQI {_aqi} | CO2 {_co2}");
+                await PublishTelemetryAsync(MQTTnet.Protocol.MqttQualityOfServiceLevel.AtLeastOnce);
             }
         }
     }

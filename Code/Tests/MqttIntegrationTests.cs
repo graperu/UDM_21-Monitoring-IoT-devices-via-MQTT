@@ -140,6 +140,39 @@ public class MqttIntegrationTests
         Assert.Equal("reconnected", await messageReceived.Task.WaitAsync(TimeSpan.FromSeconds(5)));
     }
 
+    [Fact(Timeout = 20000)]
+    public async Task RapidConnectDisconnectTogglingDoesNotThrowPendingException()
+    {
+        await using var broker = await EmbeddedBroker.StartAsync();
+        await using var client = new MqttHelper($"rapid_client_{Guid.NewGuid():N}");
+
+        for (int i = 0; i < 3; i++)
+        {
+            await client.ConnectAsync(IPAddress.Loopback.ToString(), broker.Port);
+            Assert.True(client.IsConnected);
+
+            await client.DisconnectAsync();
+            Assert.False(client.IsConnected);
+        }
+
+        // Final reconnect verification
+        await client.ConnectAsync(IPAddress.Loopback.ToString(), broker.Port);
+        Assert.True(client.IsConnected);
+    }
+
+    [Fact(Timeout = 15000)]
+    public async Task ClearRememberedSubscriptionsDoesNotThrowWhenConnected()
+    {
+        await using var broker = await EmbeddedBroker.StartAsync();
+        await using var client = new MqttHelper($"clear_sub_{Guid.NewGuid():N}");
+
+        await client.ConnectAsync(IPAddress.Loopback.ToString(), broker.Port);
+        Assert.True(client.IsConnected);
+
+        // Calling ClearRememberedSubscriptions while connected should not throw
+        client.ClearRememberedSubscriptions();
+    }
+
     private sealed class EmbeddedBroker : IAsyncDisposable
     {
         private readonly MqttServer _server;

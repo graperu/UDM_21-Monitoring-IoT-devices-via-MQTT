@@ -22,7 +22,9 @@ namespace UDM_21.Simulators
         private CancellationTokenSource? _cts;
         private Task? _telemetryTask;
         private bool _stopped;
-        private readonly MessageDeduplicator _processedCommandIds = new MessageDeduplicator(100);
+        private readonly MessageDeduplicator _processedCommandIds = new(100);
+
+        #region 1. KHỞI TẠO THIẾT BỊ
 
         protected DeviceBase(
             string deviceId,
@@ -37,13 +39,14 @@ namespace UDM_21.Simulators
             PublishIntervalSeconds = publishIntervalSeconds;
             TopicRoot = MqttTopics.NormalizeRoot(topicRoot);
 
-            Mqtt = new MqttHelper($"sim_{DeviceId}_{Guid.NewGuid().ToString("N").Substring(0, 4)}");
+            Mqtt = new MqttHelper($"sim_{DeviceId}_{Guid.NewGuid():N}"[..12]);
             Mqtt.MessageReceivedAsync += OnMessageReceivedAsync;
-
-            // Moi khi ket noi (bao gom ca lan dau va cac lan RECONNECT sau khi rot mang),
-            // tu dong publish lai trang thai "online" (retained) de Dashboard luon hien thi dung.
             Mqtt.ConnectionChangedAsync += OnMqttConnectionChangedAsync;
         }
+
+        #endregion
+
+        #region 2. KẾT NỐI BROKER & LAST WILL AND TESTAMENT (LWT)
 
         public async Task StartAsync(string brokerHost = "broker.emqx.io", int brokerPort = 1883)
         {
@@ -58,29 +61,27 @@ namespace UDM_21.Simulators
             _cts = new CancellationTokenSource();
             _stopped = false;
 
-            var lwtStatus = new DeviceStatusMessage 
-            { 
-                MessageId = Guid.NewGuid().ToString(),
-                DeviceId = DeviceId, 
-                Status = "offline",
-                Timestamp = DateTime.UtcNow.ToString("o")
+            // Cấu hình LWT: Khi thiết bị mất kết nối đột ngột, Broker tự động phát bản tin "offline"
+            var lwtStatus = new DeviceStatusMessage
+            {
+                DeviceId = DeviceId,
+                Status = "offline"
             };
-            
+
             try
             {
-                // Đăng ký trước để subscription được ghi nhớ cả khi lần kết nối đầu thất bại.
                 await Mqtt.SubscribeAsync(CmdTopic);
                 await Mqtt.ConnectAsync(settings, StatusTopic, lwtStatus.ToJson());
                 Console.WriteLine($"[Device {DeviceId}] Online and active.");
-                AppLogger.Info("DEVICE_STARTED", $"device={DeviceId}; endpoint={settings.Host}:{settings.Port}; tls={settings.UseTls}");
+                AppLogger.Info("DEVICE_STARTED", $"device={DeviceId}; endpoint={settings.Host}:{settings.Port}");
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[Device {DeviceId}] Unreachable broker '{settings.Host}:{settings.Port}' ({ex.Message}). Auto-reconnect active...");
+                Console.WriteLine($"[Device {DeviceId}] Broker unreachable ({ex.Message}). Auto-reconnect active...");
                 AppLogger.Error("DEVICE_CONNECT_FAILED", ex);
             }
 
-            // Start telemetry publish loop regardless, auto-reconnect will re-establish session when broker is ready
+            // Bắt đầu vòng lặp phát Telemetry trên nền bất đồng bộ
             _telemetryTask = Task.Run(() => TelemetryLoopAsync(_cts.Token));
         }
 
@@ -96,19 +97,16 @@ namespace UDM_21.Simulators
                 {
                     await _telemetryTask;
                 }
-                catch (OperationCanceledException)
-                {
-                    // Kết thúc bình thường khi thiết bị dừng.
-                }
+                catch (OperationCanceledException) { }
             }
 
-            var offlineStatus = new DeviceStatusMessage 
-            { 
-                MessageId = Guid.NewGuid().ToString(),
-                DeviceId = DeviceId, 
-                Status = "offline",
-                Timestamp = DateTime.UtcNow.ToString("o")
+            // Gửi bản tin Offline chủ động khi người dùng dừng thiết bị bình thường
+            var offlineStatus = new DeviceStatusMessage
+            {
+                DeviceId = DeviceId,
+                Status = "offline"
             };
+
             if (Mqtt.IsConnected)
             {
                 try
@@ -128,30 +126,54 @@ namespace UDM_21.Simulators
             AppLogger.Info("DEVICE_STOPPED", $"device={DeviceId}");
         }
 
+        private async Task OnMqttConnectionChangedAsync(bool isConnected)
+        {
+            if (isConnected)
+            {
+                // Mỗi khi kết nối thành công, cập nhật trạng thái Online (retained = true)
+                var onlineStatus = new DeviceStatusMessage
+                {
+                    DeviceId = DeviceId,
+                    Status = "online"
+                };
+                await Mqtt.PublishAsync(StatusTopic, onlineStatus.ToJson(), MQTTnet.Protocol.MqttQualityOfServiceLevel.AtLeastOnce, retain: true);
+                Console.WriteLine($"[Device {DeviceId}] (Re)connected to Broker - published online status.");
+            }
+            else
+            {
+                Console.WriteLine($"[Device {DeviceId}] Disconnected from Broker.");
+            }
+        }
+
+        #endregion
+
+        #region 3. VÒNG LẶP PHÁT DỮ LIỆU TELEMETRY
+
+        protected abstract Dictionary<string, object> GenerateTelemetry();
+
+        protected async Task PublishTelemetryAsync(MQTTnet.Protocol.MqttQualityOfServiceLevel qos = MQTTnet.Protocol.MqttQualityOfServiceLevel.AtMostOnce)
+        {
+            var msg = new TelemetryMessage
+            {
+                DeviceId = DeviceId,
+                DeviceType = DeviceType,
+                Location = Location,
+                Data = GenerateTelemetry()
+            };
+
+            await Mqtt.PublishAsync(TelemetryTopic, msg.ToJson(), qos);
+        }
+
         private async Task TelemetryLoopAsync(CancellationToken token)
         {
             while (!token.IsCancellationRequested)
             {
                 try
                 {
-                    var data = GenerateTelemetry();
-                    var msg = new TelemetryMessage
-                    {
-                        MessageId = Guid.NewGuid().ToString(),
-                        DeviceId = DeviceId,
-                        DeviceType = DeviceType,
-                        Location = Location,
-                        Timestamp = DateTime.UtcNow.ToString("o"),
-                        Data = data
-                    };
-
-                    await Mqtt.PublishAsync(TelemetryTopic, msg.ToJson(), MQTTnet.Protocol.MqttQualityOfServiceLevel.AtMostOnce);
+                    await PublishTelemetryAsync(MQTTnet.Protocol.MqttQualityOfServiceLevel.AtMostOnce);
                 }
                 catch (Exception ex)
                 {
-                    // Neu dang mat ket noi, PublishAsync co the nem loi - bo qua chu ky nay,
-                    // vong lap TelemetryLoopAsync van tiep tuc chay o chu ky ke tiep.
-                    // MqttHelper se tu lo viec ket noi lai o cho khac.
                     Console.WriteLine($"[Device {DeviceId}] Telemetry error: {ex.Message}");
                 }
 
@@ -166,7 +188,9 @@ namespace UDM_21.Simulators
             }
         }
 
-        protected abstract Dictionary<string, object> GenerateTelemetry();
+        #endregion
+
+        #region 4. TIẾP NHẬN & PHẢN HỒI LỆNH ĐIỀU KHIỂN (COMMAND / ACK)
 
         protected virtual Task HandleCommandAsync(CommandMessage cmd)
         {
@@ -178,18 +202,21 @@ namespace UDM_21.Simulators
         {
             if (topic != CmdTopic) return Task.CompletedTask;
 
+            // 1. Kiểm tra cú pháp JSON của lệnh
             if (!MessageValidator.TryParseCommand(payload, out var cmd, out var error) || cmd == null)
             {
                 AppLogger.Warning("COMMAND_REJECTED", $"device={DeviceId}; reason={error}");
                 return Task.CompletedTask;
             }
 
+            // 2. Kiểm tra lệnh có được hỗ trợ cho loại thiết bị này không
             if (!MessageValidator.TryValidateCommandForDevice(DeviceType, cmd.Command, cmd.Params, out error))
             {
                 AppLogger.Warning("COMMAND_REJECTED", $"device={DeviceId}; reason={error}");
                 return Task.CompletedTask;
             }
 
+            // 3. Chống lặp lệnh trùng ID
             if (!_processedCommandIds.TryAccept(cmd.MessageId))
             {
                 AppLogger.Warning("COMMAND_DUPLICATE", $"device={DeviceId}; message_id={cmd.MessageId}");
@@ -201,26 +228,7 @@ namespace UDM_21.Simulators
             return HandleCommandAsync(cmd);
         }
 
-        // Duoc goi moi khi trang thai ket noi MQTT thay doi (ket noi lan dau, mat ket noi, hoac reconnect thanh cong)
-        private async Task OnMqttConnectionChangedAsync(bool isConnected)
-        {
-            if (isConnected)
-            {
-                var onlineStatus = new DeviceStatusMessage 
-                { 
-                    MessageId = Guid.NewGuid().ToString(),
-                    DeviceId = DeviceId, 
-                    Status = "online",
-                    Timestamp = DateTime.UtcNow.ToString("o")
-                };
-                await Mqtt.PublishAsync(StatusTopic, onlineStatus.ToJson(), MQTTnet.Protocol.MqttQualityOfServiceLevel.AtLeastOnce, retain: true);
-                Console.WriteLine($"[Device {DeviceId}] (Re)connected to Broker - published online status.");
-            }
-            else
-            {
-                Console.WriteLine($"[Device {DeviceId}] Disconnected from Broker.");
-            }
-        }
+        #endregion
 
         public async ValueTask DisposeAsync()
         {

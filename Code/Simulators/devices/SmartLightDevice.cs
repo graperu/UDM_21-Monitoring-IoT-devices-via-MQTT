@@ -32,7 +32,7 @@ namespace UDM_21.Simulators.Devices
             {
                 if (cmd.Params.TryGetValue("state", out var stateObj) && stateObj != null)
                 {
-                    _state = stateObj.ToString()?.ToUpper() ?? (_state == "ON" ? "OFF" : "ON");
+                    _state = stateObj.ToString()?.ToUpperInvariant() ?? (_state == "ON" ? "OFF" : "ON");
                 }
                 else
                 {
@@ -52,20 +52,8 @@ namespace UDM_21.Simulators.Devices
 
             if (stateChanged)
             {
-                Console.WriteLine($"[Device {DeviceId}] 💡 PHẢN HỒI LỆNH: Đèn đã thực sự {(_state == "ON" ? "BẬT" : "TẮT")} (Độ sáng: {(_state == "ON" ? _brightness : 0)}%)!");
-
-                // Ngay lập tức gửi Telemetry mới để Dashboard phản hồi tức thì
-                var data = GenerateTelemetry();
-                var msg = new TelemetryMessage
-                {
-                    MessageId = Guid.NewGuid().ToString(),
-                    DeviceId = DeviceId,
-                    DeviceType = DeviceType,
-                    Location = Location,
-                    Timestamp = DateTime.UtcNow.ToString("o"),
-                    Data = data
-                };
-                await Mqtt.PublishAsync(TelemetryTopic, msg.ToJson(), MQTTnet.Protocol.MqttQualityOfServiceLevel.AtLeastOnce);
+                Console.WriteLine($"[Device {DeviceId}] 💡 PHẢN HỒI LỆNH: Đèn đã {(_state == "ON" ? "BẬT" : "TẮT")} (Độ sáng: {(_state == "ON" ? _brightness : 0)}%)");
+                await PublishTelemetryAsync(MQTTnet.Protocol.MqttQualityOfServiceLevel.AtLeastOnce);
             }
         }
     }

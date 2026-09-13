@@ -19,15 +19,9 @@ namespace UDM_21.Simulators.Devices
         protected override Dictionary<string, object> GenerateTelemetry()
         {
             double v = Math.Round(_voltage + (_rand.NextDouble() * 4.0 - 2.0), 1);
-            double i;
-            if (_forceOverload)
-            {
-                i = Math.Round(16.0 + _rand.NextDouble() * 3.0, 2); // > 3500W
-            }
-            else
-            {
-                i = Math.Max(0.5, Math.Round(_current + (_rand.NextDouble() * 1.0 - 0.5), 2));
-            }
+            double i = _forceOverload
+                ? Math.Round(16.0 + _rand.NextDouble() * 3.0, 2)
+                : Math.Max(0.5, Math.Round(_current + (_rand.NextDouble() * 1.0 - 0.5), 2));
 
             double powerW = Math.Round(v * i, 1);
             _totalKwh += Math.Round((powerW / 1000.0) * (PublishIntervalSeconds / 3600.0), 4);
@@ -70,18 +64,8 @@ namespace UDM_21.Simulators.Devices
 
             if (stateChanged)
             {
-                Console.WriteLine($"[Device {DeviceId}] ⚡ PHẢN HỒI LỆNH: Cập nhật tải điện -> Overload: {_forceOverload} | kWh: {_totalKwh}");
-                var data = GenerateTelemetry();
-                var msg = new TelemetryMessage
-                {
-                    MessageId = Guid.NewGuid().ToString(),
-                    DeviceId = DeviceId,
-                    DeviceType = DeviceType,
-                    Location = Location,
-                    Timestamp = DateTime.UtcNow.ToString("o"),
-                    Data = data
-                };
-                await Mqtt.PublishAsync(TelemetryTopic, msg.ToJson(), MQTTnet.Protocol.MqttQualityOfServiceLevel.AtLeastOnce);
+                Console.WriteLine($"[Device {DeviceId}] ⚡ PHẢN HỒI LỆNH: Tải điện -> Overload: {_forceOverload} | kWh: {_totalKwh}");
+                await PublishTelemetryAsync(MQTTnet.Protocol.MqttQualityOfServiceLevel.AtLeastOnce);
             }
         }
     }

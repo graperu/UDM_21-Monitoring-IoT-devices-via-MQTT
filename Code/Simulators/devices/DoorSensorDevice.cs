@@ -30,54 +30,41 @@ namespace UDM_21.Simulators.Devices
             await base.HandleCommandAsync(cmd);
             bool stateChanged = false;
 
-            if (cmd.Command == "OPEN_DOOR")
+            switch (cmd.Command)
             {
-                _doorState = "OPEN";
-                stateChanged = true;
-            }
-            else if (cmd.Command == "CLOSE_DOOR")
-            {
-                _doorState = "CLOSED";
-                stateChanged = true;
-            }
-            else if (cmd.Command == "TOGGLE_DOOR")
-            {
-                _doorState = _doorState == "CLOSED" ? "OPEN" : "CLOSED";
-                stateChanged = true;
-            }
-            else if (cmd.Command == "SET_DOOR_STATE")
-            {
-                if (cmd.Params.TryGetValue("door_state", out var ds) && ds != null)
-                {
-                    _doorState = ds.ToString()?.ToUpperInvariant() ?? _doorState;
+                case "OPEN_DOOR":
+                    _doorState = "OPEN";
                     stateChanged = true;
-                }
-            }
-            else if (cmd.Command == "TRIGGER_ALARM")
-            {
-                _tamperAlert = true;
-                stateChanged = true;
-            }
-            else if (cmd.Command == "CLEAR_ALARM")
-            {
-                _tamperAlert = false;
-                stateChanged = true;
+                    break;
+                case "CLOSE_DOOR":
+                    _doorState = "CLOSED";
+                    stateChanged = true;
+                    break;
+                case "TOGGLE_DOOR":
+                    _doorState = _doorState == "CLOSED" ? "OPEN" : "CLOSED";
+                    stateChanged = true;
+                    break;
+                case "SET_DOOR_STATE":
+                    if (cmd.Params.TryGetValue("door_state", out var ds) && ds != null)
+                    {
+                        _doorState = ds.ToString()?.ToUpperInvariant() ?? _doorState;
+                        stateChanged = true;
+                    }
+                    break;
+                case "TRIGGER_ALARM":
+                    _tamperAlert = true;
+                    stateChanged = true;
+                    break;
+                case "CLEAR_ALARM":
+                    _tamperAlert = false;
+                    stateChanged = true;
+                    break;
             }
 
             if (stateChanged)
             {
                 Console.WriteLine($"[Device {DeviceId}] 🚪 PHẢN HỒI LỆNH: Cửa hiện đang [{_doorState}] | Cảnh báo: {_tamperAlert}");
-                var data = GenerateTelemetry();
-                var msg = new TelemetryMessage
-                {
-                    MessageId = Guid.NewGuid().ToString(),
-                    DeviceId = DeviceId,
-                    DeviceType = DeviceType,
-                    Location = Location,
-                    Timestamp = DateTime.UtcNow.ToString("o"),
-                    Data = data
-                };
-                await Mqtt.PublishAsync(TelemetryTopic, msg.ToJson(), MQTTnet.Protocol.MqttQualityOfServiceLevel.AtLeastOnce);
+                await PublishTelemetryAsync(MQTTnet.Protocol.MqttQualityOfServiceLevel.AtLeastOnce);
             }
         }
     }

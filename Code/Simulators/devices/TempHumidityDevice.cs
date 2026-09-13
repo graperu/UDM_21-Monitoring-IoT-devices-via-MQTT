@@ -17,17 +17,10 @@ namespace UDM_21.Simulators.Devices
 
         protected override Dictionary<string, object> GenerateTelemetry()
         {
-            double temp;
             double hum = Math.Round(_baseHum + (_rand.NextDouble() * 4.0 - 2.0), 2);
-
-            if (_forceAlert)
-            {
-                temp = Math.Round(50.0 + _rand.NextDouble() * 5.0, 2);
-            }
-            else
-            {
-                temp = Math.Round(_baseTemp + (_rand.NextDouble() * 2.0 - 1.0), 2);
-            }
+            double temp = _forceAlert
+                ? Math.Round(50.0 + _rand.NextDouble() * 5.0, 2)
+                : Math.Round(_baseTemp + (_rand.NextDouble() * 2.0 - 1.0), 2);
 
             return new Dictionary<string, object>
             {
@@ -68,18 +61,8 @@ namespace UDM_21.Simulators.Devices
 
             if (stateChanged)
             {
-                Console.WriteLine($"[Device {DeviceId}] 🌡️ PHẢN HỒI LỆNH: Cập nhật môi trường nhiệt độ -> {_baseTemp}°C (ForceAlert: {_forceAlert})");
-                var data = GenerateTelemetry();
-                var msg = new TelemetryMessage
-                {
-                    MessageId = Guid.NewGuid().ToString(),
-                    DeviceId = DeviceId,
-                    DeviceType = DeviceType,
-                    Location = Location,
-                    Timestamp = DateTime.UtcNow.ToString("o"),
-                    Data = data
-                };
-                await Mqtt.PublishAsync(TelemetryTopic, msg.ToJson(), MQTTnet.Protocol.MqttQualityOfServiceLevel.AtLeastOnce);
+                Console.WriteLine($"[Device {DeviceId}] 🌡️ PHẢN HỒI LỆNH: Nhiệt độ -> {_baseTemp}°C (ForceAlert: {_forceAlert})");
+                await PublishTelemetryAsync(MQTTnet.Protocol.MqttQualityOfServiceLevel.AtLeastOnce);
             }
         }
     }
