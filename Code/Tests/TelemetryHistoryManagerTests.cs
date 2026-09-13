@@ -58,6 +58,55 @@ public sealed class TelemetryHistoryManagerTests
         }
     }
 
+    [Fact]
+    public void GetFilteredHistorySupportsAllAndSpecificDevices()
+    {
+        var databasePath = CreateTemporaryDatabasePath();
+        try
+        {
+            var manager = new TelemetryHistoryManager(databasePath);
+            var msg1 = new TelemetryMessage
+            {
+                MessageId = "m1",
+                DeviceId = "temp_hum_01",
+                DeviceType = "sensor",
+                Location = "lab",
+                Timestamp = "2026-09-07T01:00:00.0000000Z",
+                Data = new Dictionary<string, object> { ["temperature"] = 28.5 }
+            };
+            var msg2 = new TelemetryMessage
+            {
+                MessageId = "m2",
+                DeviceId = "power_meter_01",
+                DeviceType = "meter",
+                Location = "home",
+                Timestamp = "2026-09-07T01:00:01.0000000Z",
+                Data = new Dictionary<string, object> { ["power_watt"] = 1000.0 }
+            };
+
+            manager.AddTelemetry(msg1);
+            manager.AddTelemetry(msg2);
+
+            // Filter for temp_hum_01 only
+            var tempOnly = manager.GetFilteredHistory("temp_hum_01");
+            Assert.Single(tempOnly);
+            Assert.Equal("temp_hum_01", tempOnly[0].DeviceId);
+
+            // Filter for power_meter_01 only
+            var meterOnly = manager.GetFilteredHistory("power_meter_01");
+            Assert.Single(meterOnly);
+            Assert.Equal("power_meter_01", meterOnly[0].DeviceId);
+
+            // Filter for all (null or "ALL")
+            var all = manager.GetFilteredHistory(null);
+            Assert.Equal(2, all.Count);
+        }
+        finally
+        {
+            DeleteSqliteFiles(databasePath);
+        }
+    }
+
     private static TelemetryMessage CreateMessage(string id, string timestamp) => new()
     {
         MessageId = id,

@@ -156,6 +156,77 @@ namespace UDM_21.Dashboard.Services
             }
         }
 
+        public List<TelemetryMessage> GetAllHistory(int limit = 50)
+        {
+            lock (_lock)
+            {
+                try
+                {
+                    using var connection = OpenConnection();
+                    using var command = connection.CreateCommand();
+                    command.CommandText = """
+                        SELECT message_id, device_id, device_type, location, timestamp_utc, data_json
+                        FROM telemetry_history
+                        ORDER BY timestamp_ticks DESC, received_at_utc DESC
+                        LIMIT $limit;
+                        """;
+                    command.Parameters.AddWithValue("$limit", limit);
+
+                    var list = new List<TelemetryMessage>();
+                    using var reader = command.ExecuteReader();
+                    while (reader.Read())
+                    {
+                        list.Add(ReadMessage(reader));
+                    }
+                    return list;
+                }
+                catch (Exception ex)
+                {
+                    AppLogger.Error("HISTORY_DATABASE_ALL_FAILED", ex);
+                    return new List<TelemetryMessage>();
+                }
+            }
+        }
+
+        public List<TelemetryMessage> GetFilteredHistory(string? deviceId = null, int limit = 50)
+        {
+            if (string.IsNullOrWhiteSpace(deviceId) || deviceId.Equals("ALL", StringComparison.OrdinalIgnoreCase))
+            {
+                return GetAllHistory(limit);
+            }
+
+            lock (_lock)
+            {
+                try
+                {
+                    using var connection = OpenConnection();
+                    using var command = connection.CreateCommand();
+                    command.CommandText = """
+                        SELECT message_id, device_id, device_type, location, timestamp_utc, data_json
+                        FROM telemetry_history
+                        WHERE device_id = $device_id
+                        ORDER BY timestamp_ticks DESC, received_at_utc DESC
+                        LIMIT $limit;
+                        """;
+                    command.Parameters.AddWithValue("$device_id", deviceId);
+                    command.Parameters.AddWithValue("$limit", limit);
+
+                    var list = new List<TelemetryMessage>();
+                    using var reader = command.ExecuteReader();
+                    while (reader.Read())
+                    {
+                        list.Add(ReadMessage(reader));
+                    }
+                    return list;
+                }
+                catch (Exception ex)
+                {
+                    AppLogger.Error("HISTORY_DATABASE_FILTER_FAILED", ex);
+                    return new List<TelemetryMessage>();
+                }
+            }
+        }
+
         public int GetCount(string deviceId)
         {
             if (string.IsNullOrWhiteSpace(deviceId)) return 0;
