@@ -8,27 +8,21 @@ namespace UDM_21.Dashboard.Controllers
 {
     public sealed class MqttController : IAsyncDisposable
     {
-        // Cache phát hiện message trùng
-        private static readonly HashSet<string> ProcessedMessages = new();
-
-        // Lưu thứ tự message để giới hạn 100 bản tin gần nhất
-        
-        private static readonly Queue<string> MessageQueue = new();
-
-        private const int MaxCacheSize = 100;
-        // Lưu timestamp mới nhất của từng thiết bị
-        private static readonly Dictionary<string, DateTime> LastTimestampByDevice = new();
-
         private readonly MqttHelper _mqtt;
-        private readonly TelemetryMessageFilter _telemetryFilter = new TelemetryMessageFilter(100);
-        private readonly MessageDeduplicator _statusDeduplicator = new MessageDeduplicator(100);
-        private readonly TimestampOrderingFilter _statusOrderingFilter = new TimestampOrderingFilter();
+        private readonly TelemetryMessageFilter _telemetryFilter = new(100);
+        private readonly MessageDeduplicator _statusDeduplicator = new(100);
+        private readonly TimestampOrderingFilter _statusOrderingFilter = new();
         private string _topicRoot = MqttTopics.DefaultRoot;
 
+        // Sự kiện gửi lên giao diện WPF
         public event Action<bool, string>? ConnectionStatusChanged;
         public event Action<TelemetryMessage>? TelemetryReceived;
         public event Action<DeviceStatusMessage>? DeviceStatusReceived;
         public event Action<string>? MessageRejected;
+
+        public bool IsConnected => _mqtt.IsConnected;
+
+        #region 1. KHỞI TẠO & KẾT NỐI MQTT BROKER
 
         public MqttController(string? clientId = null)
         {
@@ -41,15 +35,21 @@ namespace UDM_21.Dashboard.Controllers
 
         public async Task ConnectAsync(string host = "broker.emqx.io", int port = 1883)
         {
-            await ConnectAsync(
-                new MqttConnectionSettings { Host = host, Port = port },
-                MqttTopics.DefaultRoot);
+            await ConnectAsync(new MqttConnectionSettings { Host = host, Port = port }, MqttTopics.DefaultRoot);
         }
 
         public async Task ConnectAsync(MqttConnectionSettings settings, string topicRoot)
         {
             ArgumentNullException.ThrowIfNull(settings);
             settings.Validate();
+
+            // Nếu đang kết nối, chủ động ngắt kết nối cũ an toàn trước khi kết nối lại
+            if (_mqtt.IsConnected)
+            {
+                await _mqtt.DisconnectAsync();
+                await Task.Delay(150);
+            }
+
             _topicRoot = MqttTopics.NormalizeRoot(topicRoot);
 
             ConnectionStatusChanged?.Invoke(false, "Đang kết nối MQTT Broker...");
@@ -58,13 +58,109 @@ namespace UDM_21.Dashboard.Controllers
             await _mqtt.ConnectAsync(settings);
         }
 
-        public Task DisconnectAsync() => _mqtt.DisconnectAsync();
+        public async Task DisconnectAsync()
+        {
+            await _mqtt.DisconnectAsync();
+            ConnectionStatusChanged?.Invoke(false, "Đã ngắt kết nối MQTT Broker.");
+        }
 
         public async Task SubscribeWildcardTopicsAsync()
         {
+            // Subscribe toàn bộ telemetry và status của tất cả thiết bị
             await _mqtt.SubscribeAsync(MqttTopics.TelemetryWildcard(_topicRoot), MqttQualityOfServiceLevel.AtLeastOnce);
             await _mqtt.SubscribeAsync(MqttTopics.StatusWildcard(_topicRoot), MqttQualityOfServiceLevel.AtLeastOnce);
         }
+
+        #endregion
+
+        #region 2. ĐIỀU PHỐI TIN NHẮN THEO TOPIC (ROUTING)
+
+        private Task OnMessageReceivedAsync(string topic, string payload, MqttQualityOfServiceLevel qos, bool retain)
+        {
+            if (topic.EndsWith("/telemetry", StringComparison.Ordinal))
+            {
+                HandleTelemetry(topic, payload);
+            }
+            else if (topic.EndsWith("/status", StringComparison.Ordinal))
+            {
+                HandleStatus(topic, payload);
+            }
+            else
+            {
+                Reject($"Topic không được hỗ trợ: {topic}");
+            }
+
+            return Task.CompletedTask;
+        }
+
+        #endregion
+
+        #region 3. BỘ LỌC CHỐNG TRÙNG & THỨ TỰ (DEDUPLICATION & ORDERING)
+
+        private void HandleTelemetry(string topic, string payload)
+        {
+            // 1. Kiểm tra định dạng JSON
+            if (!MessageValidator.TryParseTelemetry(payload, out var message, out var error) || message == null)
+            {
+                Reject(error);
+                return;
+            }
+
+            // 2. Kiểm tra tính hợp lệ Topic
+            if (!MessageValidator.ValidateTopic(topic, "telemetry", message.DeviceId, message.DeviceType, message.Location, out error, _topicRoot))
+            {
+                Reject(error);
+                return;
+            }
+
+            // 3. Lọc trùng ID và lọc gói tin đến trễ theo Timestamp
+            if (!_telemetryFilter.TryAccept(message, out error))
+            {
+                Reject(error);
+                return;
+            }
+
+            // 4. Phát sự kiện cập nhật giao diện
+            TelemetryReceived?.Invoke(message);
+        }
+
+        private void HandleStatus(string topic, string payload)
+        {
+            // 1. Kiểm tra định dạng JSON trạng thái (Online/Offline)
+            if (!MessageValidator.TryParseStatus(payload, out var status, out var error) || status == null)
+            {
+                Reject(error);
+                return;
+            }
+
+            // 2. Kiểm tra tính hợp lệ Topic
+            if (!MessageValidator.ValidateTopic(topic, "status", status.DeviceId, null, null, out error, _topicRoot))
+            {
+                Reject(error);
+                return;
+            }
+
+            // 3. Chống trùng bản tin status
+            if (!_statusDeduplicator.TryAccept(status.MessageId))
+            {
+                Reject($"Duplicate status message: {status.MessageId}");
+                return;
+            }
+
+            // 4. Kiểm tra thứ tự thời gian của thiết bị
+            if (!_statusOrderingFilter.TryAccept(status.DeviceId, status.Timestamp, out error))
+            {
+                Reject(error);
+                return;
+            }
+
+            // 5. Phát sự kiện trạng thái thiết bị
+            DeviceStatusReceived?.Invoke(status);
+        }
+
+        #endregion
+
+        #region 4. GỬI LỆNH ĐIỀU KHIỂN XUỐNG THIẾT BỊ (COMMAND)
 
         public async Task SendCommandAsync(
             string location,
@@ -82,6 +178,7 @@ namespace UDM_21.Dashboard.Controllers
 
             parameters ??= new Dictionary<string, object>();
             command = command?.Trim().ToUpperInvariant() ?? string.Empty;
+
             if (!MessageValidator.TryValidateCommandForDevice(deviceType, command, parameters, out var error))
             {
                 throw new ArgumentException(error, nameof(command));
@@ -98,13 +195,9 @@ namespace UDM_21.Dashboard.Controllers
             AppLogger.Info("COMMAND_SENT", $"device={deviceId}; command={command}");
         }
 
-        public async ValueTask DisposeAsync()
-        {
-            _mqtt.ConnectionChangedAsync -= OnConnectionChangedAsync;
-            _mqtt.ReconnectingAsync -= OnReconnectingAsync;
-            _mqtt.MessageReceivedAsync -= OnMessageReceivedAsync;
-            await _mqtt.DisposeAsync();
-        }
+        #endregion
+
+        #region 5. TRẠNG THÁI MẠNG & GIẢI PHÓNG TÀI NGUYÊN
 
         private Task OnConnectionChangedAsync(bool isConnected)
         {
@@ -127,158 +220,20 @@ namespace UDM_21.Dashboard.Controllers
             return Task.CompletedTask;
         }
 
-        private Task OnMessageReceivedAsync(
-            string topic,
-            string payload,
-            MqttQualityOfServiceLevel qos,
-            bool retain)
-        {
-            if (topic.EndsWith("/telemetry", StringComparison.Ordinal))
-            {
-                HandleTelemetry(topic, payload);
-            }
-            else if (topic.EndsWith("/status", StringComparison.Ordinal))
-            {
-                HandleStatus(topic, payload);
-            }
-            else
-            {
-                Reject($"Topic không được hỗ trợ: {topic}");
-            }
-
-            return Task.CompletedTask;
-        }
-
-        private void HandleTelemetry(string topic, string payload)
-        {
-            if (!MessageValidator.TryParseTelemetry(payload, out var message, out var error) || message == null)
-            {
-                Reject(error);
-                return;
-            }
-
-            if (!MessageValidator.ValidateTopic(
-                    topic,
-                    "telemetry",
-                    message.DeviceId,
-                    message.DeviceType,
-                    message.Location,
-                    out error,
-                    _topicRoot))
-            {
-                Reject(error);
-                return;
-            }
-
-            if (!_telemetryFilter.TryAccept(message, out error))
-            {
-                Reject(error);
-                return;
-            }
-
-            TelemetryReceived?.Invoke(message);
-        }
-
-        private Task OnMessageReceivedAsync(
-            string topic,
-            string payload,
-            MQTTnet.Protocol.MqttQualityOfServiceLevel qos,
-            bool retain)
-        
-        {
-            if (!MessageValidator.TryParseStatus(payload, out var status, out var error) || status == null)
-            {
-                var msg = TelemetryMessage.FromJson(payload);
-
-                if (msg != null)
-                {
-                    if (string.IsNullOrWhiteSpace(msg.MessageId))
-                        {
-                            Console.WriteLine(
-                                "[MQTT] Invalid message: missing message_id");
-
-                            return Task.CompletedTask;
-                        }
-                    // =====================
-                    // DEDUPLICATION
-                    // =====================
-
-                    if (ProcessedMessages.Contains(msg.MessageId))
-                    {
-                        Console.WriteLine(
-                            $"[MQTT] Duplicate message ignored: {msg.MessageId}");
-
-                        return Task.CompletedTask;
-                    }
-
-                    // Thêm message mới vào cache
-                    ProcessedMessages.Add(msg.MessageId);
-                    MessageQueue.Enqueue(msg.MessageId);
-
-                    // Chỉ giữ lại 100 message gần nhất
-                    if (MessageQueue.Count > MaxCacheSize)
-                    {
-                        string oldestMessageId = MessageQueue.Dequeue();
-                        ProcessedMessages.Remove(oldestMessageId);
-                    }
-
-                    // =====================
-                    // OUT OF ORDER
-                    // =====================
-
-                    if (DateTime.TryParse(
-                        msg.Timestamp,
-                        out DateTime currentTimestamp))
-                    {
-                        if (LastTimestampByDevice.TryGetValue(
-                            msg.DeviceId,
-                            out DateTime lastTimestamp))
-                        {
-                            if (currentTimestamp < lastTimestamp)
-                            {
-                                Console.WriteLine(
-                                    $"[MQTT] Out-of-order message ignored. Device={msg.DeviceId}");
-
-                                return Task.CompletedTask;
-                            }
-                        }
-
-                        LastTimestampByDevice[msg.DeviceId]
-                            = currentTimestamp;
-                    }
-
-                    TelemetryReceived?.Invoke(msg);
-                }
-                Reject(error);
-                return;
-            }
-
-            if (!MessageValidator.ValidateTopic(topic, "status", status.DeviceId, null, null, out error, _topicRoot))
-            {
-               
-                Reject(error);
-                return;
-            }
-
-            if (!_statusDeduplicator.TryAccept(status.MessageId))
-            {
-                Reject($"Duplicate status message: {status.MessageId}");
-                return;
-            }
-
-            if (!_statusOrderingFilter.TryAccept(status.DeviceId, status.Timestamp, out error))
-            {
-                Reject(error);
-                return;
-            }
-
-            DeviceStatusReceived?.Invoke(status);
-        }
-
         private void Reject(string reason)
         {
             MessageRejected?.Invoke(reason);
             AppLogger.Warning("MESSAGE_REJECTED", reason);
         }
+
+        public async ValueTask DisposeAsync()
+        {
+            _mqtt.ConnectionChangedAsync -= OnConnectionChangedAsync;
+            _mqtt.ReconnectingAsync -= OnReconnectingAsync;
+            _mqtt.MessageReceivedAsync -= OnMessageReceivedAsync;
+            await _mqtt.DisposeAsync();
+        }
+
+        #endregion
     }
 }

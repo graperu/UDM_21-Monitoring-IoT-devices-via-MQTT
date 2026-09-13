@@ -1,337 +1,727 @@
 <Window x:Class="UDM_21.Dashboard.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:sys="clr-namespace:System;assembly=mscorlib"
-        Title="UDM_21: Giám Sát &amp; Điều Khiển IoT Qua MQTT (C# .NET 8 WPF)" Height="760" Width="1220"
-        WindowStartupLocation="CenterScreen">
+        xmlns:models="clr-namespace:UDM_21.Dashboard.Models"
+        Title="UDM_21 — Giám sát thiết bị IoT"
+        Height="768" Width="1366" MinHeight="680" MinWidth="1100"
+        WindowStartupLocation="CenterScreen"
+        Background="{StaticResource AppBgBrush}"
+        FontFamily="{StaticResource AppFont}">
 
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVisConverter"/>
     </Window.Resources>
 
-    <Grid Margin="10">
+    <Grid>
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/> <!-- 0: Simplified Top Bar -->
+            <RowDefinition Height="Auto"/> <!-- 1: Collapsible Connection Settings -->
+            <RowDefinition Height="*"/>    <!-- 2: 3-Area Workspace + Bottom Tabs -->
         </Grid.RowDefinitions>
 
-        <!-- Top Connection Bar -->
-        <GroupBox Header="Cấu Hình Kết Nối MQTT Broker" Grid.Row="0" Margin="0,0,0,10" Padding="8">
-            <Grid>
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="Auto"/>
-                </Grid.RowDefinitions>
-
-                <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,7">
-                    <TextBlock Text="Broker Host:" VerticalAlignment="Center" Margin="0,0,5,0"/>
-                    <TextBox x:Name="TxtHost" Text="broker.emqx.io" Width="145" VerticalAlignment="Center" Margin="0,0,15,0"/>
-
-                    <TextBlock Text="Port:" VerticalAlignment="Center" Margin="0,0,5,0"/>
-                    <TextBox x:Name="TxtPort" Text="1883" Width="55" VerticalAlignment="Center" Margin="0,0,15,0"/>
-
-                    <TextBlock Text="Topic Root:" VerticalAlignment="Center" Margin="0,0,5,0"/>
-                    <TextBox x:Name="TxtTopicRoot" Text="udm21_nhom01" Width="145" VerticalAlignment="Center" Margin="0,0,15,0"/>
-
-                    <CheckBox x:Name="ChkTls" Content="TLS" VerticalAlignment="Center"
-                              ToolTip="Bật MQTT qua TLS và kiểm tra chứng chỉ broker"/>
+        <!-- ===================================================================
+             ROW 0: TOP BAR (SIMPLIFIED FOR NORMAL USERS)
+             Only shows: Title, Status dot, Broker name, [Kết nối]/[Ngắt kết nối], [⚙ Cài đặt]
+             =================================================================== -->
+        <Border Grid.Row="0" Background="#FFFFFF" BorderBrush="{StaticResource PanelBorderBrush}" BorderThickness="0,0,0,1" Padding="14,8">
+            <DockPanel LastChildFill="False">
+                <!-- Left: Clean Title -->
+                <StackPanel Orientation="Horizontal" DockPanel.Dock="Left" VerticalAlignment="Center">
+                    <TextBlock Text="UDM_21 — Giám sát thiết bị IoT" FontWeight="Bold" FontSize="14" Foreground="{StaticResource TextPrimaryBrush}" VerticalAlignment="Center"/>
                 </StackPanel>
 
-                <StackPanel Grid.Row="1" Orientation="Horizontal">
-                    <TextBlock Text="Username:" VerticalAlignment="Center" Margin="0,0,5,0"/>
-                    <TextBox x:Name="TxtUsername" Width="110" VerticalAlignment="Center" Margin="0,0,15,0"/>
+                <!-- Right: Connection Status & Actions -->
+                <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" VerticalAlignment="Center">
+                    <!-- Status Indicator Badge -->
+                    <Border x:Name="BrokerStatusBadge" Background="{StaticResource WarningBgBrush}" BorderBrush="#CBD5E1" BorderThickness="1" CornerRadius="2" Padding="9,4" Margin="0,0,10,0">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <Ellipse x:Name="DotBrokerStatus" Width="8" Height="8" Fill="{StaticResource WarningBrush}" Margin="0,0,7,0"/>
+                            <TextBlock x:Name="LblStatus" Text="Đang kết nối..." FontSize="11.5" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}"/>
+                            <TextBlock Text="·" Foreground="#94A3B8" Margin="6,0"/>
+                            <TextBlock Text="broker.emqx.io" FontSize="11.5" Foreground="{StaticResource TextSecondaryBrush}"/>
+                        </StackPanel>
+                    </Border>
 
-                    <TextBlock Text="Password:" VerticalAlignment="Center" Margin="0,0,5,0"/>
-                    <PasswordBox x:Name="TxtPassword" Width="110" VerticalAlignment="Center" Margin="0,0,15,0"
-                                 ToolTip="Mật khẩu chỉ giữ trong bộ nhớ, không ghi vào source hoặc log"/>
+                    <!-- Connection Action Buttons: Only 1 active/visible at a time -->
+                    <Button x:Name="BtnConnect" Content="Kết Nối" Width="85" Height="28" Margin="0,0,6,0" Click="BtnConnect_Click" Style="{StaticResource PrimaryButtonStyle}"/>
+                    <Button x:Name="BtnDisconnect" Content="Ngắt Kết Nối" Width="95" Height="28" Margin="0,0,6,0" Click="BtnDisconnect_Click" Style="{StaticResource DangerButtonStyle}" Visibility="Collapsed"/>
 
-                    <Button x:Name="BtnConnect" Content="Kết Nối" Width="90" Margin="0,0,10,0" Click="BtnConnect_Click" Background="#28a745" Foreground="White" FontWeight="Bold"/>
-                    <Button x:Name="BtnDisconnect" Content="Ngắt Kết Nối" Width="100" Margin="0,0,20,0" IsEnabled="False" Click="BtnDisconnect_Click" Background="#dc3545" Foreground="White" FontWeight="Bold"/>
+                    <!-- Settings Drawer Toggle Button -->
+                    <Button x:Name="BtnToggleConfig" Content="⚙ Cài đặt" Height="28" Padding="10,3" Margin="0,0,8,0" Click="BtnToggleConfig_Click" ToolTip="Cài đặt kết nối máy chủ MQTT"/>
 
-                    <TextBlock x:Name="LblStatus" Text="Trạng thái: Chưa kết nối" VerticalAlignment="Center" FontWeight="Bold" Foreground="Gray" TextWrapping="Wrap"/>
+                    <!-- Subtle Topmost Option -->
+                    <CheckBox x:Name="ChkTopmost" Content="Luôn trên cùng" VerticalAlignment="Center" Margin="4,0,0,0"
+                              ToolTip="Ghim cửa sổ ứng dụng luôn ở trên cùng" Click="ChkTopmost_Click"/>
                 </StackPanel>
-            </Grid>
-        </GroupBox>
+            </DockPanel>
+        </Border>
 
-        <!-- Main Content Area -->
-        <Grid Grid.Row="1">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="3.2*"/>
-                <ColumnDefinition Width="2*"/>
-            </Grid.ColumnDefinitions>
+        <!-- ===================================================================
+             ROW 1: COLLAPSIBLE CONNECTION SETTINGS DRAWER
+             Contains host, port, topic root, credentials for presentation/grading
+             =================================================================== -->
+        <Border x:Name="DrawerConfig" Grid.Row="1" Visibility="Collapsed" Background="#F8FAFC" BorderBrush="{StaticResource PanelBorderBrush}" BorderThickness="0,0,0,1" Padding="14,10">
+            <StackPanel>
+                <DockPanel LastChildFill="False" Margin="0,0,0,8">
+                    <StackPanel Orientation="Horizontal" DockPanel.Dock="Left" VerticalAlignment="Center">
+                        <TextBlock Text="Máy chủ:" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,0,6,0" Foreground="{StaticResource TextSecondaryBrush}"/>
+                        <TextBox x:Name="TxtHost" Text="broker.emqx.io" Width="140" Height="25" Margin="0,0,12,0"/>
 
-            <!-- Left: Visual Dashboard & History / Table Views -->
-            <Grid Grid.Column="0" Margin="0,0,5,0">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="*"/>
-                    <RowDefinition Height="1.6*"/>
-                </Grid.RowDefinitions>
+                        <TextBlock Text="Cổng:" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,0,6,0" Foreground="{StaticResource TextSecondaryBrush}"/>
+                        <TextBox x:Name="TxtPort" Text="1883" Width="55" Height="25" Margin="0,0,12,0"/>
 
-                <!-- Visual Devices Cards Grid -->
-                <GroupBox Header="Trực Quan Hóa 5 Thiết Bị IoT (Real-Time Visual Devices)" Grid.Row="0" Margin="0,0,0,8" Padding="6">
-                    <ItemsControl x:Name="IcDeviceCards">
-                        <ItemsControl.ItemsPanel>
-                            <ItemsPanelTemplate>
-                                <UniformGrid Columns="5" Rows="1"/>
-                            </ItemsPanelTemplate>
-                        </ItemsControl.ItemsPanel>
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate>
-                                <Border Margin="4" CornerRadius="8" Background="#F8F9FA" BorderBrush="#DEE2E6" BorderThickness="1.5" Padding="8">
-                                    <Grid>
-                                        <Grid.RowDefinitions>
-                                            <RowDefinition Height="Auto"/>
-                                            <RowDefinition Height="Auto"/>
-                                            <RowDefinition Height="Auto"/>
-                                            <RowDefinition Height="Auto"/>
-                                        </Grid.RowDefinitions>
+                        <TextBlock Text="Topic Root:" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,0,6,0" Foreground="{StaticResource TextSecondaryBrush}"/>
+                        <TextBox x:Name="TxtTopicRoot" Text="udm21_nhom01" Width="110" Height="25" Margin="0,0,12,0"/>
 
-                                        <!-- Header: Icon & ID -->
-                                        <DockPanel Grid.Row="0" Margin="0,0,0,4">
-                                            <TextBlock Text="{Binding Icon}" FontSize="18" VerticalAlignment="Center" Margin="0,0,4,0"/>
-                                            <Ellipse DockPanel.Dock="Right" Width="9" Height="9" VerticalAlignment="Center">
-                                                <Ellipse.Style>
-                                                    <Style TargetType="Ellipse">
-                                                        <Setter Property="Fill" Value="Gray"/>
-                                                        <Style.Triggers>
-                                                            <DataTrigger Binding="{Binding StatusText}" Value="Online">
-                                                                <Setter Property="Fill" Value="#28a745"/>
-                                                            </DataTrigger>
-                                                            <DataTrigger Binding="{Binding StatusText}" Value="⚠️ Cảnh báo">
-                                                                <Setter Property="Fill" Value="#fd7e14"/>
-                                                            </DataTrigger>
-                                                            <DataTrigger Binding="{Binding StatusText}" Value="Offline">
-                                                                <Setter Property="Fill" Value="#dc3545"/>
-                                                            </DataTrigger>
-                                                        </Style.Triggers>
-                                                    </Style>
-                                                </Ellipse.Style>
-                                            </Ellipse>
-                                            <TextBlock Text="{Binding DeviceId}" FontWeight="Bold" FontSize="11" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
-                                        </DockPanel>
+                        <CheckBox x:Name="ChkTls" Content="TLS" VerticalAlignment="Center" Margin="0,0,12,0" ToolTip="Bảo mật đường truyền với TLS/SSL"/>
 
-                                        <!-- Location & Type -->
-                                        <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,4">
-                                            <Border Background="{Binding BadgeColor}" CornerRadius="3" Padding="4,1" Margin="0,0,3,0">
-                                                <TextBlock Text="{Binding DeviceType}" Foreground="White" FontSize="9" FontWeight="SemiBold"/>
-                                            </Border>
-                                            <Border Background="#6c757d" CornerRadius="3" Padding="4,1">
-                                                <TextBlock Text="{Binding Location}" Foreground="White" FontSize="9"/>
-                                            </Border>
-                                        </StackPanel>
+                        <TextBlock Text="Tên đăng nhập:" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,0,6,0" Foreground="{StaticResource TextSecondaryBrush}"/>
+                        <TextBox x:Name="TxtUsername" Width="90" Height="25" Margin="0,0,12,0"/>
 
-                                        <!-- Primary Big Display -->
-                                        <Border Grid.Row="2" Background="White" CornerRadius="5" BorderBrush="#E9ECEF" BorderThickness="1" Padding="4,6" Margin="0,2,0,4">
-                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-                                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                                                    <TextBlock Text="{Binding PrimaryValue}" FontSize="18" FontWeight="ExtraBold" Foreground="#212529"/>
-                                                    <TextBlock Text="{Binding PrimaryUnit}" FontSize="12" FontWeight="Bold" Margin="2,0,0,0" VerticalAlignment="Bottom" Foreground="#495057"/>
+                        <TextBlock Text="Mật khẩu:" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,0,6,0" Foreground="{StaticResource TextSecondaryBrush}"/>
+                        <PasswordBox x:Name="TxtPassword" Width="90" Height="25" Margin="0,0,12,0"/>
+                    </StackPanel>
+
+                    <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" VerticalAlignment="Center">
+                        <Button Content="Lưu &amp; Kết Nối Lại" Height="26" Padding="10,2" Margin="0,0,6,0" Style="{StaticResource PrimaryButtonStyle}" Click="BtnSaveAndReconnect_Click"/>
+                        <Button Content="Đóng" Width="60" Height="26" Click="BtnToggleConfig_Click"/>
+                    </StackPanel>
+                </DockPanel>
+                <TextBlock Text="* Cấu hình kết nối tới MQTT Broker dành cho kiểm thử và giảng viên đánh giá."
+                           FontSize="10.5" Foreground="{StaticResource TextMutedBrush}"/>
+            </StackPanel>
+        </Border>
+
+        <!-- ===================================================================
+             ROW 2: MAIN WORKSPACE (UPPER 3-AREA + LOWER TABS)
+             =================================================================== -->
+        <Grid Grid.Row="2" Margin="10,8,10,8">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="270" MinHeight="230"/>  <!-- Upper 3-Area: Danh Sách | Thông Tin | Điều Khiển -->
+                <RowDefinition Height="6"/>    <!-- GridSplitter -->
+                <RowDefinition Height="*"/>    <!-- Lower Tabs: Thiết Bị | Lịch Sử | Nhật Ký | Kỹ Thuật -->
+            </Grid.RowDefinitions>
+
+            <!-- ===========================================================
+                 UPPER 3-AREA WORKSPACE: LEFT (LIST) | CENTER (DETAIL) | RIGHT (CONTROL)
+                 =========================================================== -->
+            <Grid Grid.Row="0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="310"/> <!-- Left: Danh sách thiết bị -->
+                    <ColumnDefinition Width="*"/>   <!-- Center: Thông tin thiết bị đang chọn -->
+                    <ColumnDefinition Width="340"/> <!-- Right: Điều khiển thiết bị -->
+                </Grid.ColumnDefinitions>
+
+                <!-- =======================================================
+                     AREA 1 (LEFT): DANH SÁCH THIẾT BỊ (COMPACT LIST)
+                     ======================================================= -->
+                <Border Grid.Column="0" Background="#FFFFFF" BorderBrush="{StaticResource PanelBorderBrush}" BorderThickness="1" CornerRadius="2">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/> <!-- Header + KPI counter -->
+                            <RowDefinition Height="*"/>    <!-- List of Devices -->
+                        </Grid.RowDefinitions>
+
+                        <!-- Header with Status Count -->
+                        <Border Grid.Row="0" Background="#F8FAFC" BorderBrush="{StaticResource SubtleBorderBrush}" BorderThickness="0,0,0,1" Padding="10,6">
+                            <StackPanel>
+                                <DockPanel LastChildFill="False">
+                                    <TextBlock Text="DANH SÁCH THIẾT BỊ" FontWeight="Bold" FontSize="11" Foreground="{StaticResource TextPrimaryBrush}" DockPanel.Dock="Left"/>
+                                    <StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
+                                        <TextBlock Text="Tổng: " FontSize="10.5" Foreground="{StaticResource TextSecondaryBrush}"/>
+                                        <TextBlock x:Name="TxtKpiTotal" Text="5" FontWeight="Bold" FontSize="10.5" Foreground="{StaticResource TextPrimaryBrush}"/>
+                                    </StackPanel>
+                                </DockPanel>
+                                <StackPanel Orientation="Horizontal" Margin="0,3,0,0">
+                                    <TextBlock Text="● " Foreground="{StaticResource SuccessBrush}" FontSize="9"/>
+                                    <TextBlock x:Name="TxtKpiOnline" Text="0" FontWeight="Bold" FontSize="10" Foreground="{StaticResource SuccessBrush}"/>
+                                    <TextBlock Text=" Hoạt động   " FontSize="10" Foreground="{StaticResource TextSecondaryBrush}"/>
+
+                                    <TextBlock Text="● " Foreground="{StaticResource WarningBrush}" FontSize="9"/>
+                                    <TextBlock x:Name="TxtKpiWarning" Text="0" FontWeight="Bold" FontSize="10" Foreground="{StaticResource WarningBrush}"/>
+                                    <TextBlock Text=" Cảnh báo   " FontSize="10" Foreground="{StaticResource TextSecondaryBrush}"/>
+
+                                    <TextBlock Text="● " Foreground="{StaticResource DangerBrush}" FontSize="9"/>
+                                    <TextBlock x:Name="TxtKpiOffline" Text="5" FontWeight="Bold" FontSize="10" Foreground="{StaticResource DangerBrush}"/>
+                                    <TextBlock Text=" Ngoại tuyến" FontSize="10" Foreground="{StaticResource TextSecondaryBrush}"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Compact Vertical Device List -->
+                        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                            <ItemsControl x:Name="IcDeviceCards">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type models:DeviceItem}">
+                                        <Border Margin="3,2" Padding="8,6" CornerRadius="2"
+                                                Cursor="Hand" MouseLeftButtonDown="DeviceCard_Click">
+                                            <Border.Style>
+                                                <Style TargetType="Border">
+                                                    <Setter Property="Background" Value="#FFFFFF"/>
+                                                    <Setter Property="BorderBrush" Value="{StaticResource SubtleBorderBrush}"/>
+                                                    <Setter Property="BorderThickness" Value="1"/>
+                                                    <Style.Triggers>
+                                                        <Trigger Property="IsMouseOver" Value="True">
+                                                            <Setter Property="Background" Value="#F8FAFC"/>
+                                                            <Setter Property="BorderBrush" Value="#94A3B8"/>
+                                                        </Trigger>
+                                                        <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                                            <Setter Property="Background" Value="#EFF6FF"/>
+                                                            <Setter Property="BorderBrush" Value="{StaticResource PrimaryBrush}"/>
+                                                            <Setter Property="BorderThickness" Value="1.5"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Border.Style>
+
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto"/> <!-- Status Dot -->
+                                                    <ColumnDefinition Width="*"/>    <!-- Name, Location, ID -->
+                                                    <ColumnDefinition Width="Auto"/> <!-- Measurement Display -->
+                                                </Grid.ColumnDefinitions>
+
+                                                <!-- Status Dot -->
+                                                <Ellipse Grid.Column="0" Width="8" Height="8" Fill="{Binding StatusBadgeFg}" Margin="0,0,8,0" VerticalAlignment="Center"/>
+
+                                                <!-- Friendly Name & Location -->
+                                                <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,6,0">
+                                                    <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" FontSize="11.5" Foreground="{StaticResource TextPrimaryBrush}" TextTrimming="CharacterEllipsis"/>
+                                                    <StackPanel Orientation="Horizontal" Margin="0,1,0,0">
+                                                        <TextBlock Text="{Binding LocationFriendly}" FontSize="10" Foreground="{StaticResource TextSecondaryBrush}"/>
+                                                        <TextBlock Text=" · " FontSize="9" Foreground="#CBD5E1"/>
+                                                        <TextBlock Text="{Binding DeviceId}" FontSize="9.5" Foreground="{StaticResource TextMutedBrush}"/>
+                                                    </StackPanel>
                                                 </StackPanel>
-                                                <TextBlock Text="{Binding SecondaryValue}" FontSize="9" Foreground="#6c757d" HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" Margin="0,2,0,0"/>
-                                            </StackPanel>
-                                        </Border>
 
-                                        <!-- Quick Action or Status -->
-                                        <Border Grid.Row="3" Margin="0,2,0,0">
-                                            <StackPanel>
-                                                <Button Content="{Binding ActionButtonText}" Height="22" FontSize="9.5" FontWeight="Bold" Background="{Binding BadgeColor}" Foreground="White"
-                                                        Click="QuickToggle_Click" Tag="{Binding}"/>
-                                                <TextBlock Text="{Binding LastSeen}" FontSize="8.5" Foreground="#adb5bd" HorizontalAlignment="Center" Margin="0,2,0,0"/>
-                                            </StackPanel>
+                                                <!-- Right: Current Measurement (AQI 67, Đã đóng, 1019 W, Tắt, 28.5 °C) -->
+                                                <Border Grid.Column="2" Background="#F1F5F9" CornerRadius="2" Padding="6,2.5" VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding ListDisplayValue}" FontWeight="Bold" FontSize="11" Foreground="{StaticResource TextPrimaryBrush}" HorizontalAlignment="Right"/>
+                                                </Border>
+                                            </Grid>
                                         </Border>
-                                    </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+                    </Grid>
+                </Border>
+
+                <!-- =======================================================
+                     AREA 2 (CENTER): THÔNG TIN THIẾT BỊ ĐANG CHỌN (SIMPLE DETAIL)
+                     Strict LABEL | VALUE format. No fake descriptions.
+                     ======================================================= -->
+                <Border Grid.Column="1" Background="#FFFFFF" BorderBrush="{StaticResource PanelBorderBrush}" BorderThickness="1" CornerRadius="2" Margin="6,0" Padding="12">
+                    <Grid x:Name="PanelDeviceDetail">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/> <!-- Header: Name & Status Badge -->
+                            <RowDefinition Height="Auto"/> <!-- Location & Subtext -->
+                            <RowDefinition Height="Auto"/> <!-- Warning Banner (Conditional) -->
+                            <RowDefinition Height="*"/>    <!-- Measurements: LABEL | VALUE -->
+                            <RowDefinition Height="Auto"/> <!-- Footer: Last seen & History shortcut -->
+                        </Grid.RowDefinitions>
+
+                        <!-- Row 0: Device Name & Status Badge -->
+                        <DockPanel Grid.Row="0" LastChildFill="False" Margin="0,0,0,2">
+                            <StackPanel Orientation="Horizontal" DockPanel.Dock="Left" VerticalAlignment="Center">
+                                <TextBlock x:Name="TxtDetailDisplayName" Text="Thiết bị đang chọn" FontSize="14" FontWeight="Bold" Foreground="{StaticResource TextPrimaryBrush}"/>
+                                <TextBlock x:Name="TxtDetailCategory" Visibility="Collapsed"/>
+                            </StackPanel>
+
+                            <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" VerticalAlignment="Center">
+                                <ContentControl x:Name="DetailDeviceVisual" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                <Border x:Name="BadgeDetailStatus" Background="{StaticResource SuccessBgBrush}" BorderBrush="#86EFAC" BorderThickness="1" CornerRadius="2" Padding="8,2.5" VerticalAlignment="Center">
+                                    <TextBlock x:Name="TxtDetailStatus" Text="Hoạt động" FontSize="11" FontWeight="Bold" Foreground="{StaticResource SuccessBrush}"/>
                                 </Border>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                </GroupBox>
+                            </StackPanel>
+                        </DockPanel>
 
-                <!-- Top Left: Device List Table -->
-                <GroupBox Header="Bảng Chi Tiết Thiết Bị Real-Time" Grid.Row="1" Margin="0,0,0,5">
-                    <DataGrid x:Name="DgDevices" AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" SelectionChanged="DgDevices_SelectionChanged" MouseDoubleClick="DgDevices_MouseDoubleClick">
+                        <!-- Row 1: Location & ID -->
+                        <TextBlock x:Name="TxtDetailIdAndLocation" Grid.Row="1" Text="Vị trí: --" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,6"/>
+
+                        <!-- Row 2: Warning Alert (Only if active) -->
+                        <Border x:Name="BannerWarning" Grid.Row="2" Background="#FEF2F2" BorderBrush="#DC2626" BorderThickness="1" CornerRadius="2" Padding="8,4" Margin="0,0,0,6" Visibility="Collapsed">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="⚠️ " FontSize="11" Foreground="#DC2626" VerticalAlignment="Center"/>
+                                <TextBlock x:Name="TxtWarningMessage" Text="Cảnh báo: Giá trị đo vượt ngưỡng an toàn!" FontWeight="Bold" FontSize="10.5" Foreground="#991B1B" VerticalAlignment="Center"/>
+                                <TextBlock Text="·" Foreground="#FCA5A5" Margin="6,0" VerticalAlignment="Center"/>
+                                <TextBlock x:Name="TxtWarningRecommendation" Text="Vui lòng kiểm tra trạng thái thiết bị." FontSize="10" Foreground="#7F1D1D" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Row 3: Strict LABEL | VALUE Measurement Table -->
+                        <ScrollViewer Grid.Row="3" VerticalScrollBarVisibility="Auto" Margin="0,2,0,4">
+                            <ItemsControl x:Name="IcDetailMetrics">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type models:DeviceMetricTile}">
+                                        <Border BorderBrush="{StaticResource SubtleBorderBrush}" BorderThickness="0,0,0,1" Padding="6,5">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="150"/> <!-- LABEL -->
+                                                    <ColumnDefinition Width="*"/>   <!-- VALUE -->
+                                                </Grid.ColumnDefinitions>
+
+                                                <TextBlock Grid.Column="0" Text="{Binding Label}" FontSize="11.5" FontWeight="SemiBold" Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center"/>
+
+                                                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding Value}" FontSize="13" FontWeight="Bold" Foreground="{StaticResource TextPrimaryBrush}"/>
+                                                    <TextBlock Text="{Binding Unit}" FontSize="10.5" FontWeight="SemiBold" Foreground="{StaticResource TextMutedBrush}" Margin="4,0,0,1" VerticalAlignment="Bottom"/>
+                                                </StackPanel>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+
+                        <!-- Row 4: Footer with Last Seen & History Link -->
+                        <DockPanel Grid.Row="4" LastChildFill="False" Margin="0,4,0,0">
+                            <TextBlock x:Name="TxtDetailLastSeen" Text="Cập nhật lần cuối: --:--:--" FontSize="10.5" Foreground="{StaticResource TextMutedBrush}" DockPanel.Dock="Left" VerticalAlignment="Center"/>
+                            <Button Content="Xem Lịch Sử" FontSize="10.5" Padding="8,2" Height="24" DockPanel.Dock="Right" Click="BtnViewSelectedHistory_Click"/>
+                        </DockPanel>
+                    </Grid>
+                </Border>
+
+                <!-- =======================================================
+                     AREA 3 (RIGHT): ĐIỀU KHIỂN THIẾT BỊ (SIMPLE CONTROLS)
+                     ======================================================= -->
+                <Border Grid.Column="2" Background="#FFFFFF" BorderBrush="{StaticResource PanelBorderBrush}" BorderThickness="1" CornerRadius="2" Padding="12">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/> <!-- Title & Feedback -->
+                            <RowDefinition Height="Auto"/> <!-- Context Commands -->
+                            <RowDefinition Height="*"/>    <!-- Collapsed Advanced Command -->
+                        </Grid.RowDefinitions>
+
+                        <!-- Header: Title & Status -->
+                        <DockPanel Grid.Row="0" LastChildFill="False" Margin="0,0,0,8">
+                            <TextBlock x:Name="TxtControlDeviceTitle" Text="Điều khiển" FontWeight="Bold" FontSize="12" Foreground="{StaticResource TextPrimaryBrush}" DockPanel.Dock="Left"/>
+                            <TextBlock x:Name="LblCommandStatus" Text="Sẵn sàng" FontSize="10.5" Foreground="{StaticResource TextMutedBrush}" DockPanel.Dock="Right" VerticalAlignment="Center"/>
+                        </DockPanel>
+
+                        <!-- Context Controls for Active Device -->
+                        <StackPanel Grid.Row="1">
+                            <!-- 1. Smart Light Controls -->
+                            <Border x:Name="PanelCtrlLight" Visibility="Collapsed" Background="#F8FAFC" BorderBrush="{StaticResource SubtleBorderBrush}" BorderThickness="1" CornerRadius="2" Padding="8" Margin="0,0,0,6">
+                                <StackPanel>
+                                    <Grid Margin="0,0,0,8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Button Grid.Column="0" Content="Bật" Margin="0,0,3,0" Style="{StaticResource SuccessButtonStyle}" Click="BtnLightOn_Click"/>
+                                        <Button Grid.Column="1" Content="Tắt" Margin="3,0,0,0" Click="BtnLightOff_Click"/>
+                                    </Grid>
+
+                                    <DockPanel Margin="0,0,0,2">
+                                        <TextBlock Text="Độ sáng:" FontSize="10.5" Foreground="{StaticResource TextSecondaryBrush}"/>
+                                        <TextBlock x:Name="TxtBrightnessValue" Text="100%" FontWeight="Bold" FontSize="10.5" Foreground="{StaticResource PrimaryBrush}" HorizontalAlignment="Right"/>
+                                    </DockPanel>
+                                    <Slider x:Name="SliderBrightness" Minimum="0" Maximum="100" Value="100" SmallChange="5" LargeChange="10" Margin="0,0,0,6" ValueChanged="SliderBrightness_ValueChanged"/>
+
+                                    <UniformGrid Columns="4" Rows="1">
+                                        <Button Content="0%" Margin="0,0,2,0" Height="22" FontSize="10" Click="BtnBrightnessPreset_Click" Tag="0"/>
+                                        <Button Content="25%" Margin="1,0,1,0" Height="22" FontSize="10" Click="BtnBrightnessPreset_Click" Tag="25"/>
+                                        <Button Content="50%" Margin="1,0,1,0" Height="22" FontSize="10" Click="BtnBrightnessPreset_Click" Tag="50"/>
+                                        <Button Content="100%" Margin="2,0,0,0" Height="22" FontSize="10" Click="BtnBrightnessPreset_Click" Tag="100"/>
+                                    </UniformGrid>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- 2. Door Sensor Controls -->
+                            <Border x:Name="PanelCtrlDoor" Visibility="Collapsed" Background="#F8FAFC" BorderBrush="{StaticResource SubtleBorderBrush}" BorderThickness="1" CornerRadius="2" Padding="8" Margin="0,0,0,6">
+                                <StackPanel>
+                                    <Grid Margin="0,0,0,6">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Button Grid.Column="0" Content="Mở Cửa" Margin="0,0,3,0" Style="{StaticResource PrimaryButtonStyle}" Click="BtnDoorOpen_Click"/>
+                                        <Button Grid.Column="1" Content="Đóng Cửa" Margin="3,0,0,0" Style="{StaticResource SuccessButtonStyle}" Click="BtnDoorClose_Click"/>
+                                    </Grid>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Button Grid.Column="0" Content="Báo Động" Margin="0,0,3,0" Style="{StaticResource DangerButtonStyle}" Click="BtnDoorTriggerAlarm_Click"/>
+                                        <Button Grid.Column="1" Content="Tắt Báo Động" Margin="3,0,0,0" Click="BtnDoorClearAlarm_Click"/>
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- 3. Power Meter Controls -->
+                            <Border x:Name="PanelCtrlMeter" Visibility="Collapsed" Background="#F8FAFC" BorderBrush="{StaticResource SubtleBorderBrush}" BorderThickness="1" CornerRadius="2" Padding="8" Margin="0,0,0,6">
+                                <StackPanel>
+                                    <Grid Margin="0,0,0,6">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Button Grid.Column="0" Content="Tải 500W" Margin="0,0,3,0" Click="BtnMeterLoad500_Click"/>
+                                        <Button Grid.Column="1" Content="Tải 2000W" Margin="3,0,0,0" Click="BtnMeterLoad2000_Click"/>
+                                    </Grid>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Button Grid.Column="0" Content="Thử Quá Tải" Margin="0,0,3,0" Style="{StaticResource DangerButtonStyle}" Click="BtnMeterOverload_Click"/>
+                                        <Button Grid.Column="1" Content="Reset kWh" Margin="3,0,0,0" Click="BtnMeterResetEnergy_Click"/>
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- 4. Air Quality Controls -->
+                            <Border x:Name="PanelCtrlAir" Visibility="Collapsed" Background="#F8FAFC" BorderBrush="{StaticResource SubtleBorderBrush}" BorderThickness="1" CornerRadius="2" Padding="8" Margin="0,0,0,6">
+                                <StackPanel>
+                                    <Grid Margin="0,0,0,6">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Button Grid.Column="0" Content="Lọc Khí Sạch" Margin="0,0,3,0" Style="{StaticResource SuccessButtonStyle}" Click="BtnAirPurify_Click"/>
+                                        <Button Grid.Column="1" Content="Khí Thường" Margin="3,0,0,0" Click="BtnAirAqi85_Click"/>
+                                    </Grid>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Button Grid.Column="0" Content="Ô Nhiễm (180)" Margin="0,0,3,0" Style="{StaticResource DangerButtonStyle}" Click="BtnAirAqi180_Click"/>
+                                        <Button Grid.Column="1" Content="Báo Động Khẩn" Margin="3,0,0,0" Click="BtnAirTriggerAlarm_Click"/>
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- 5. Climate Sensor Controls -->
+                            <Border x:Name="PanelCtrlClimate" Visibility="Collapsed" Background="#F8FAFC" BorderBrush="{StaticResource SubtleBorderBrush}" BorderThickness="1" CornerRadius="2" Padding="8" Margin="0,0,0,6">
+                                <StackPanel>
+                                    <Grid Margin="0,0,0,6">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Button Grid.Column="0" Content="Cài 22°C" Margin="0,0,3,0" Click="BtnClimateTemp22_Click"/>
+                                        <Button Grid.Column="1" Content="Cài 28°C" Margin="3,0,0,0" Click="BtnClimateTemp28_Click"/>
+                                    </Grid>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Button Grid.Column="0" Content="Quá Nhiệt (52°C)" Margin="0,0,3,0" Style="{StaticResource DangerButtonStyle}" Click="BtnClimateHeatAlert_Click"/>
+                                        <Button Grid.Column="1" Content="Hiệu Chuẩn" Margin="3,0,0,0" Click="BtnClimateCalibrate_Click"/>
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+
+                        <!-- Collapsible Advanced Command (Default Collapsed) -->
+                        <Expander Grid.Row="2" Header="Tùy chọn nâng cao" IsExpanded="False" Background="#FFFFFF" BorderBrush="{StaticResource SubtleBorderBrush}" BorderThickness="1" Padding="4" Margin="0,4,0,0">
+                            <StackPanel Margin="0,4,0,0">
+                                <TextBlock Text="Mẫu Lệnh:" FontSize="10" Foreground="{StaticResource TextSecondaryBrush}"/>
+                                <ComboBox x:Name="CmbPresetCommands" Margin="0,2,0,4" SelectionChanged="CmbPresetCommands_SelectionChanged"/>
+
+                                <TextBlock Text="Tên Lệnh:" FontSize="10" Foreground="{StaticResource TextSecondaryBrush}"/>
+                                <TextBox x:Name="TxtCommand" Text="TOGGLE_POWER" Height="25" Margin="0,2,0,4"/>
+
+                                <TextBlock Text="Tham Số JSON:" FontSize="10" Foreground="{StaticResource TextSecondaryBrush}"/>
+                                <TextBox x:Name="TxtParams" Text="{}{&quot;state&quot;: &quot;ON&quot;}" FontFamily="{StaticResource MonoFont}" Height="25" Margin="0,2,0,6"/>
+
+                                <Button x:Name="BtnSendCmd" Content="Gửi Lệnh Thủ Công" Height="26" Click="BtnSendCmd_Click" Style="{StaticResource PrimaryButtonStyle}"/>
+                            </StackPanel>
+                        </Expander>
+                    </Grid>
+                </Border>
+            </Grid>
+
+            <!-- ===========================================================
+                 SPLITTER
+                 =========================================================== -->
+            <GridSplitter Grid.Row="1" Height="4" HorizontalAlignment="Stretch" VerticalAlignment="Center" Background="#E2E8F0" Cursor="SizeNS"/>
+
+            <!-- ===========================================================
+                 LOWER WORKSPACE: 4 TABS FOR ALL SYSTEM DATA
+                 Tab titles: Thiết bị | Lịch sử | Nhật ký | Thông tin kỹ thuật
+                 =========================================================== -->
+            <TabControl x:Name="MainTabs" Grid.Row="2" SelectedIndex="0">
+                <!-- =======================================================
+                     TAB 1: THIẾT BỊ (BẢNG TELEMETRY TỔNG HỢP)
+                     ======================================================= -->
+                <TabItem Header="Thiết bị">
+                    <DataGrid x:Name="DgDevices" AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False"
+                              SelectionChanged="DgDevices_SelectionChanged" MouseDoubleClick="DgDevices_MouseDoubleClick">
                         <DataGrid.Columns>
-                            <DataGridTextColumn Header="Device ID" Binding="{Binding DeviceId}" Width="110"/>
-                            <DataGridTextColumn Header="Loại" Binding="{Binding DeviceType}" Width="70"/>
-                            <DataGridTextColumn Header="Vị Trí" Binding="{Binding Location}" Width="70"/>
-                            <DataGridTemplateColumn Header="Trạng thái" Width="105">
+                            <DataGridTextColumn Header="Tên Thiết Bị" Binding="{Binding DisplayName}" FontWeight="SemiBold" Width="220"/>
+                            <DataGridTextColumn Header="Mã Kỹ Thuật" Binding="{Binding DeviceId}" Foreground="#64748B" Width="120"/>
+                            <DataGridTextColumn Header="Vị Trí" Binding="{Binding LocationFriendly}" Width="140"/>
+                            <DataGridTemplateColumn Header="Trạng Thái" Width="110">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
-                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="5,0">
-                                            <TextBlock Text="{Binding StatusText}" VerticalAlignment="Center"/>
-                                            <Ellipse Width="8" Height="8" Margin="6,0,0,0" VerticalAlignment="Center">
-                                                <Ellipse.Style>
-                                                    <Style TargetType="Ellipse">
-                                                        <Setter Property="Fill" Value="Gray"/>
-                                                        <Style.Triggers>
-                                                            <DataTrigger Binding="{Binding StatusText}" Value="Online">
-                                                                <Setter Property="Fill" Value="LimeGreen"/>
-                                                            </DataTrigger>
-                                                            <DataTrigger Binding="{Binding StatusText}" Value="⚠️ Cảnh báo">
-                                                                <Setter Property="Fill" Value="OrangeRed"/>
-                                                            </DataTrigger>
-                                                            <DataTrigger Binding="{Binding StatusText}" Value="Offline">
-                                                                <Setter Property="Fill" Value="Red"/>
-                                                            </DataTrigger>
-                                                        </Style.Triggers>
-                                                    </Style>
-                                                </Ellipse.Style>
-                                            </Ellipse>
-                                        </StackPanel>
+                                        <Border Background="{Binding StatusBadgeBg}" CornerRadius="2" Padding="6,1.5" HorizontalAlignment="Left" VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding StatusText}" Foreground="{Binding StatusBadgeFg}" FontWeight="Bold" FontSize="10.5"/>
+                                        </Border>
                                     </DataTemplate>
                                 </DataGridTemplateColumn.CellTemplate>
                             </DataGridTemplateColumn>
-                            <DataGridTextColumn Header="Tóm Tắt Dữ Liệu" Binding="{Binding LatestTelemetrySummary}" Width="*"/>
+                            <DataGridTextColumn Header="Đo Lường Hiện Tại" Binding="{Binding ListDisplayValue}" FontWeight="Bold" Width="140"/>
+                            <DataGridTextColumn Header="Thông Số Chi Tiết" Binding="{Binding LatestTelemetrySummary}" Width="*"/>
+                            <DataGridTextColumn Header="Cập Nhật" Binding="{Binding LastSeen}" Foreground="#64748B" Width="120"/>
                         </DataGrid.Columns>
                     </DataGrid>
-                </GroupBox>
+                </TabItem>
 
-                <!-- Bottom Left: Telemetry History DataGrid -->
-                <GroupBox Header="Lịch Sử Dữ Liệu Telemetry" Grid.Row="2" Margin="0,5,0,0">
-                    <DataGrid x:Name="DgHistory" AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False">
-                        <DataGrid.Columns>
-                            <DataGridTextColumn Header="Mã Bản Tin" Binding="{Binding MessageId}" Width="100"/>
-                            <DataGridTextColumn Header="Device ID" Binding="{Binding DeviceId}" Width="110"/>
-                            <DataGridTextColumn Header="Loại" Binding="{Binding DeviceType}" Width="70"/>
-                            <DataGridTextColumn Header="Vị Trí" Binding="{Binding Location}" Width="70"/>
-                            <DataGridTextColumn Header="Thời Gian" Binding="{Binding Timestamp}" Width="130"/>
-                            <DataGridTextColumn Header="Dữ Liệu Telemetry" Binding="{Binding DataJson}" Width="*"/>
-                        </DataGrid.Columns>
-                    </DataGrid>
-                </GroupBox>
-            </Grid>
+                <!-- =======================================================
+                     TAB 2: LỊCH SỬ (SQLITE TELEMETRY)
+                     ======================================================= -->
+                <TabItem Header="Lịch sử">
+                    <Grid Background="#FFFFFF">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/> <!-- Filter & Actions Toolbar -->
+                            <RowDefinition Height="*"/>    <!-- DataGrid + Selected Detail Panel -->
+                        </Grid.RowDefinitions>
 
-            <!-- Right: Control Panel & Console -->
-            <Grid Grid.Column="1" Margin="5,0,0,0">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="*"/>
-                </Grid.RowDefinitions>
+                        <!-- Filter & Actions Toolbar -->
+                        <Border Grid.Row="0" Background="#F8FAFC" BorderBrush="{StaticResource SubtleBorderBrush}" BorderThickness="0,0,0,1" Padding="10,6">
+                            <DockPanel LastChildFill="False">
+                                <StackPanel Orientation="Horizontal" DockPanel.Dock="Left" VerticalAlignment="Center">
+                                    <TextBlock Text="Lọc theo thiết bị:" FontWeight="SemiBold" FontSize="11.5" VerticalAlignment="Center" Margin="0,0,8,0" Foreground="{StaticResource TextSecondaryBrush}"/>
+                                    <ComboBox x:Name="CmbHistoryFilter" Width="240" Height="26" SelectionChanged="CmbHistoryFilter_SelectionChanged"/>
+                                    <Button Content="Làm Mới" Height="26" Padding="10,2" Margin="8,0,0,0" Click="BtnRefreshHistory_Click"/>
+                                    <TextBlock x:Name="TxtHistoryRowCount" Text="Đang tải..." FontSize="11" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center" Margin="14,0,0,0"/>
+                                </StackPanel>
 
-                <!-- Command Box -->
-                <GroupBox Header="Gửi Lệnh Điều Khiển (Publish Command)" Grid.Row="0" Margin="0,0,0,10" Padding="8">
-                    <StackPanel>
-                        <TextBlock Text="Chọn Thiết Bị:" Margin="0,0,0,3"/>
-                        <ComboBox x:Name="CmbDevices" DisplayMemberPath="DeviceId" Margin="0,0,0,8" SelectionChanged="CmbDevices_SelectionChanged"/>
+                                <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" VerticalAlignment="Center">
+                                    <Button Content="Xóa Lịch Sử Đang Xem" Height="26" Padding="10,2" Click="BtnClearSelectedHistory_Click"/>
+                                </StackPanel>
+                            </DockPanel>
+                        </Border>
 
-                        <TextBlock Text="Mẫu Lệnh Sẵn Có (Preset Commands):" Margin="0,0,0,3"/>
-                        <ComboBox x:Name="CmbPresetCommands" Margin="0,0,0,8" SelectionChanged="CmbPresetCommands_SelectionChanged"/>
+                        <!-- Main Table & Collapsible Secondary Detail Panel -->
+                        <Grid Grid.Row="1">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="*"/>    <!-- DataGrid -->
+                                <RowDefinition Height="Auto"/> <!-- Selected Row JSON Detail Panel -->
+                            </Grid.RowDefinitions>
 
-                        <TextBlock Text="Tên Lệnh (Command):" Margin="0,0,0,3"/>
-                        <TextBox x:Name="TxtCommand" Text="TOGGLE_POWER" Margin="0,0,0,8"/>
+                            <DataGrid x:Name="DgHistory" Grid.Row="0" AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False"
+                                      SelectionChanged="DgHistory_SelectionChanged">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="Thời Gian" Binding="{Binding TimestampFormatted}" Width="160"/>
+                                    <DataGridTextColumn Header="Thiết Bị" Binding="{Binding DisplayName}" FontWeight="SemiBold" Width="190"/>
+                                    <DataGridTextColumn Header="Vị Trí" Binding="{Binding LocationFriendly}" Width="130"/>
+                                    <DataGridTextColumn Header="Chỉ Số Chính" Binding="{Binding PrimaryValue}" FontWeight="Bold" Width="130"/>
+                                    <DataGridTextColumn Header="Chỉ Số Phụ" Binding="{Binding SecondaryValue}" Width="*"/>
+                                    <DataGridTemplateColumn Header="Trạng Thái" Width="110">
+                                        <DataGridTemplateColumn.CellTemplate>
+                                            <DataTemplate>
+                                                <Border Background="{Binding StatusBadgeBg}" CornerRadius="2" Padding="6,1.5" HorizontalAlignment="Left" VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding StatusText}" Foreground="{Binding StatusColor}" FontWeight="Bold" FontSize="10.5"/>
+                                                </Border>
+                                            </DataTemplate>
+                                        </DataGridTemplateColumn.CellTemplate>
+                                    </DataGridTemplateColumn>
+                                </DataGrid.Columns>
+                            </DataGrid>
 
-                        <TextBlock Text="Tham Số (JSON):" Margin="0,0,0,3"/>
-                        <TextBox x:Name="TxtParams" Text="{}{&quot;state&quot;: &quot;ON&quot;}" Margin="0,0,0,10"/>
+                            <!-- Secondary Detail & Raw JSON Panel for Selected Row -->
+                            <Border x:Name="PanelHistoryDetail" Grid.Row="1" Background="#F8FAFC" BorderBrush="{StaticResource PanelBorderBrush}" BorderThickness="0,1,0,0" Padding="10,8" Visibility="Collapsed">
+                                <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
 
-                        <Button x:Name="BtnSendCmd" Content="Phát Lệnh Qua MQTT" Height="30" Click="BtnSendCmd_Click" Background="#007bff" Foreground="White" FontWeight="Bold" IsEnabled="False"/>
-                        <TextBlock x:Name="LblCommandStatus" Text="Chưa gửi lệnh" Margin="0,6,0,0" Foreground="Gray" TextWrapping="Wrap"/>
-                    </StackPanel>
-                </GroupBox>
+                                    <DockPanel Grid.Row="0" LastChildFill="False" Margin="0,0,0,6">
+                                        <StackPanel Orientation="Horizontal" DockPanel.Dock="Left" VerticalAlignment="Center">
+                                            <TextBlock Text="Chi tiết bản tin đã chọn:" FontWeight="Bold" FontSize="11.5" Foreground="{StaticResource TextPrimaryBrush}"/>
+                                            <TextBlock Text="·" Foreground="#94A3B8" Margin="6,0"/>
+                                            <TextBlock x:Name="TxtHistoryDetailTitle" Text="--" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}"/>
+                                        </StackPanel>
+                                        <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" VerticalAlignment="Center">
+                                            <Button Content="Sao Chép JSON" Height="22" Padding="8,1" FontSize="10.5" Margin="0,0,6,0" Click="BtnCopyHistoryJson_Click"/>
+                                            <Button Content="✕ Đóng" Height="22" Width="55" FontSize="10.5" Click="BtnCloseHistoryDetail_Click"/>
+                                        </StackPanel>
+                                    </DockPanel>
 
-                <!-- Nhật Ký Sự Kiện (Log Console) -->
-                <GroupBox Header="Log Console" Grid.Row="1" VerticalAlignment="Stretch">
-                    <ListBox x:Name="LbConsole"
-                             Background="#1E1E1E" 
-                             Foreground="#00FF00" 
-                             FontFamily="Consolas"
-                             BorderBrush="Transparent"
-                             VerticalAlignment="Stretch"
-                             ScrollViewer.VerticalScrollBarVisibility="Auto"
-                             MaxHeight="{Binding Path=ActualHeight, RelativeSource={RelativeSource AncestorType=Window}}">
-                        <ListBox.Resources>
-                            <!-- Template Vertical ScrollBar -->
-                            <ControlTemplate x:Key="VerticalScrollBarTemplate" TargetType="ScrollBar">
-                                <Grid x:Name="Bg" Background="Transparent">
-                                    <Track x:Name="PART_Track" IsDirectionReversed="True">
-                                        <Track.Thumb>
-                                            <Thumb>
-                                                <Thumb.Template>
-                                                    <ControlTemplate TargetType="Thumb">
-                                                        <Border x:Name="ThumbBorder" 
-                                                                Background="#4E4E4E" 
-                                                                CornerRadius="4" 
-                                                                Margin="1"/>
-                                                        <ControlTemplate.Triggers>
-                                                            <Trigger Property="IsMouseOver" Value="True">
-                                                                <Setter TargetName="ThumbBorder" Property="Background" Value="#6E6E6E"/>
-                                                            </Trigger>
-                                                        </ControlTemplate.Triggers>
-                                                    </ControlTemplate>
-                                                </Thumb.Template>
-                                            </Thumb>
-                                        </Track.Thumb>
-                                    </Track>
+                                    <TextBox x:Name="TxtHistoryDetailJson" Grid.Row="1" Height="85"
+                                             Background="#0F172A" Foreground="#38BDF8"
+                                             BorderThickness="0" Padding="8"
+                                             FontFamily="{StaticResource MonoFont}" FontSize="11"
+                                             IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap"
+                                             VerticalScrollBarVisibility="Auto"/>
                                 </Grid>
-                            </ControlTemplate>
+                            </Border>
+                        </Grid>
+                    </Grid>
+                </TabItem>
 
-                            <!-- Template Horizontal ScrollBar -->
-                            <ControlTemplate x:Key="HorizontalScrollBarTemplate" TargetType="ScrollBar">
-                                <Grid x:Name="Bg" Background="Transparent">
-                                    <Track x:Name="PART_Track" IsDirectionReversed="False">
-                                        <Track.Thumb>
-                                            <Thumb>
-                                                <Thumb.Template>
-                                                    <ControlTemplate TargetType="Thumb">
-                                                        <Border x:Name="ThumbBorder" 
-                                                                Background="#4E4E4E" 
-                                                                CornerRadius="4" 
-                                                                Margin="1"/>
-                                                        <ControlTemplate.Triggers>
-                                                            <Trigger Property="IsMouseOver" Value="True">
-                                                                <Setter TargetName="ThumbBorder" Property="Background" Value="#6E6E6E"/>
-                                                            </Trigger>
-                                                        </ControlTemplate.Triggers>
-                                                    </ControlTemplate>
-                                                </Thumb.Template>
-                                            </Thumb>
-                                        </Track.Thumb>
-                                    </Track>
-                                </Grid>
-                            </ControlTemplate>
+                <!-- =======================================================
+                     TAB 3: NHẬT KÝ (SYSTEM EVENT LOG)
+                     ======================================================= -->
+                <TabItem Header="Nhật ký">
+                    <Grid Background="#FFFFFF">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/> <!-- Toolbar -->
+                            <RowDefinition Height="*"/>    <!-- Monospace Log ListBox -->
+                        </Grid.RowDefinitions>
 
-                            <Style TargetType="ScrollBar">
-                                <Setter Property="Background" Value="Transparent"/>
-                                <Setter Property="Stylus.IsPressAndHoldEnabled" Value="False"/>
-                                <Setter Property="Stylus.IsFlicksEnabled" Value="False"/>
-                                <Style.Triggers>
-                                    <Trigger Property="Orientation" Value="Vertical">
-                                        <Setter Property="Width" Value="4"/>
-                                        <Setter Property="Template" Value="{StaticResource VerticalScrollBarTemplate}"/>
-                                    </Trigger>
-                                    <Trigger Property="Orientation" Value="Horizontal">
-                                        <Setter Property="Height" Value="4"/>
-                                        <Setter Property="Template" Value="{StaticResource HorizontalScrollBarTemplate}"/>
-                                    </Trigger>
-                                </Style.Triggers>
-                            </Style>
-                        </ListBox.Resources>
-                        <ListBox.ItemTemplate>
-                            <DataTemplate>
-                                <TextBox x:Name="TxtConsole"
-                                         Text="{Binding Mode=OneWay}" 
-                                         IsReadOnly="True"
-                                         SelectionBrush="#007ACC"
-                                         Background="Transparent"
-                                         Foreground="#00FF00"
-                                         Padding="0"
-                                         BorderThickness="0"/>
-                            </DataTemplate>
-                        </ListBox.ItemTemplate>
-                        <ListBox.ItemContainerStyle>
-                            <Style TargetType="ListBoxItem">
-                                <Setter Property="Padding" Value="2,1"/>
-                                <Setter Property="Template">
-                                    <Setter.Value>
-                                        <ControlTemplate TargetType="ListBoxItem">
-                                            <ContentPresenter />
-                                        </ControlTemplate>
-                                    </Setter.Value>
-                                </Setter>
-                            </Style>
-                        </ListBox.ItemContainerStyle>
-                    </ListBox>
-                </GroupBox>
-            </Grid>
+                        <Border Grid.Row="0" Background="#F8FAFC" BorderBrush="{StaticResource SubtleBorderBrush}" BorderThickness="0,0,0,1" Padding="8,4">
+                            <DockPanel LastChildFill="False">
+                                <TextBlock Text="Nhật ký sự kiện mạng và bản tin hệ thống:"
+                                           FontSize="11" Foreground="{StaticResource TextSecondaryBrush}" DockPanel.Dock="Left" VerticalAlignment="Center"/>
+                                <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" VerticalAlignment="Center">
+                                    <CheckBox x:Name="ChkAutoScrollLog" Content="Tự động cuộn" IsChecked="True" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                    <Button Content="Xóa Nhật Ký" Height="24" Padding="8,2" Click="BtnClearLog_Click"/>
+                                </StackPanel>
+                            </DockPanel>
+                        </Border>
+
+                        <!-- Engineering Monospace Log View -->
+                        <ListBox x:Name="LbLogEntries" Grid.Row="1" Background="#0F172A" BorderThickness="0" FontFamily="{StaticResource MonoFont}" FontSize="11"
+                                 ScrollViewer.VerticalScrollBarVisibility="Auto">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate DataType="{x:Type models:LogEntry}">
+                                    <StackPanel Orientation="Horizontal" Margin="0,1">
+                                        <TextBlock Text="{Binding Time}" Foreground="#94A3B8" Width="70" VerticalAlignment="Center"/>
+                                        <Border Background="{Binding CategoryBg}" CornerRadius="2" Padding="4,1" Margin="0,0,8,0" VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding Category}" Foreground="{Binding CategoryFg}" FontSize="9.5" FontWeight="Bold"/>
+                                        </Border>
+                                        <TextBlock Text="{Binding Message}" Foreground="#E2E8F0" VerticalAlignment="Center" TextWrapping="Wrap"/>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </Grid>
+                </TabItem>
+
+                <!-- =======================================================
+                     TAB 4: THÔNG TIN KỸ THUẬT (DÀNH CHO BẢO VỆ ĐỒ ÁN / GIẢNG VIÊN)
+                     Consolidates: Broker, Port, Topic Root, QoS, Retain, LWT,
+                     Deduplication, Ordering filter, and Raw JSON payload
+                     ======================================================= -->
+                <TabItem Header="Thông tin kỹ thuật">
+                    <Grid Background="#FFFFFF">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/> <!-- Network & Protocol Specifications -->
+                            <RowDefinition Height="Auto"/> <!-- Raw JSON Toolbar -->
+                            <RowDefinition Height="*"/>    <!-- Raw JSON Inspector -->
+                        </Grid.RowDefinitions>
+
+                        <!-- Specifications Grid -->
+                        <Border Grid.Row="0" Background="#F8FAFC" BorderBrush="{StaticResource SubtleBorderBrush}" BorderThickness="0,0,0,1" Padding="14,10">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+
+                                <!-- Column 1: MQTT Network & Protocol Parameters -->
+                                <StackPanel Grid.Column="0" Margin="0,0,12,0">
+                                    <TextBlock Text="THÔNG SỐ MẠNG &amp; GIAO THỨC MQTT" FontWeight="Bold" FontSize="11.5" Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,6"/>
+
+                                    <Grid Margin="0,1">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="130"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="Máy chủ (Broker):" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}"/>
+                                        <TextBlock Grid.Column="1" Text="broker.emqx.io : 1883" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}"/>
+                                    </Grid>
+
+                                    <Grid Margin="0,1">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="130"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="Gốc chủ đề (Root):" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}"/>
+                                        <TextBlock Grid.Column="1" Text="udm21_nhom01" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}"/>
+                                    </Grid>
+
+                                    <Grid Margin="0,1">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="130"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="Cấu trúc Topic:" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}"/>
+                                        <TextBlock Grid.Column="1" Text="{}{root}/telemetry/{location}/{device_type}/{device_id}" FontFamily="{StaticResource MonoFont}" FontSize="10.5" Foreground="{StaticResource PrimaryBrush}"/>
+                                    </Grid>
+
+                                    <Grid Margin="0,1">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="130"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="Chất lượng dịch vụ:" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}"/>
+                                        <TextBlock Grid.Column="1" Text="QoS 0 &amp; QoS 1 (At least once)" FontSize="11" Foreground="{StaticResource TextPrimaryBrush}"/>
+                                    </Grid>
+                                </StackPanel>
+
+                                <!-- Column 2: Reliability & Active Device MQTT Topic -->
+                                <StackPanel Grid.Column="1" Margin="12,0,0,0">
+                                    <TextBlock Text="CƠ CHẾ ĐỘ TIN CẬY &amp; THIẾT BỊ ĐANG CHỌN" FontWeight="Bold" FontSize="11.5" Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,6"/>
+
+                                    <Grid Margin="0,1">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="130"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="Cơ chế độ tin cậy:" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}"/>
+                                        <TextBlock Grid.Column="1" Text="Retained Messages, LWT, Lọc trùng ID, Timestamp Order" FontSize="11" Foreground="{StaticResource TextPrimaryBrush}"/>
+                                    </Grid>
+
+                                    <Grid Margin="0,1">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="130"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="Mã thiết bị:" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}"/>
+                                        <TextBlock x:Name="TxtTechDeviceId" Grid.Column="1" Text="--" FontFamily="{StaticResource MonoFont}" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}"/>
+                                    </Grid>
+
+                                    <Grid Margin="0,1">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="130"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="Topic Telemetry:" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}"/>
+                                        <TextBlock x:Name="TxtTechTopic" Grid.Column="1" Text="--" FontFamily="{StaticResource MonoFont}" FontSize="10.5" Foreground="{StaticResource PrimaryBrush}" TextTrimming="CharacterEllipsis"/>
+                                    </Grid>
+
+                                    <Grid Margin="0,1">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="130"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="Topic Lệnh:" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}"/>
+                                        <TextBlock x:Name="TxtTechCmdTopic" Grid.Column="1" Text="--" FontFamily="{StaticResource MonoFont}" FontSize="10.5" Foreground="{StaticResource TextSecondaryBrush}" TextTrimming="CharacterEllipsis"/>
+                                    </Grid>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+
+                        <!-- Row 1: Raw JSON Header & Copy Button -->
+                        <Border Grid.Row="1" Background="#FFFFFF" BorderBrush="{StaticResource SubtleBorderBrush}" BorderThickness="0,0,0,1" Padding="12,6">
+                            <DockPanel LastChildFill="False">
+                                <TextBlock Text="Dữ liệu gói tin MQTT JSON gốc (Raw Payload):"
+                                           FontSize="11.5" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}" DockPanel.Dock="Left" VerticalAlignment="Center"/>
+                                <Button Content="Sao Chép JSON" Height="24" Padding="10,2" DockPanel.Dock="Right" Click="BtnCopyRawJson_Click"/>
+                            </DockPanel>
+                        </Border>
+
+                        <!-- Row 2: Monospace JSON Textbox -->
+                        <TextBox x:Name="TxtRawJson" Grid.Row="2"
+                                 Background="#0F172A" Foreground="#38BDF8"
+                                 BorderThickness="0" Padding="12"
+                                 FontFamily="{StaticResource MonoFont}" FontSize="11.5"
+                                 IsReadOnly="True" AcceptsReturn="True"
+                                 TextWrapping="Wrap"
+                                 VerticalScrollBarVisibility="Auto"
+                                 HorizontalScrollBarVisibility="Auto"/>
+                    </Grid>
+                </TabItem>
+            </TabControl>
         </Grid>
     </Grid>
 </Window>

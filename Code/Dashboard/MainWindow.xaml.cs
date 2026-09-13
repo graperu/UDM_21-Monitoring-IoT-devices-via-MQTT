@@ -17,35 +17,31 @@ namespace UDM_21.Dashboard
 {
     public partial class MainWindow : Window
     {
-        private readonly MqttController _mqttController;
-        private readonly ObservableCollection<DeviceItem> _devices =
-            new ObservableCollection<DeviceItem>();
-        private readonly ObservableCollection<string> _logMessages =
-            new ObservableCollection<string>();
-        private readonly TelemetryHistoryManager _historyManager;
+        private const int MaxLogLines = 250;
+        private readonly MqttController _mqttController = new();
+        private readonly ObservableCollection<DeviceItem> _devices = new();
+        private readonly ObservableCollection<LogEntry> _logEntries = new();
+        private readonly TelemetryHistoryManager _historyManager = new();
+        private DeviceItem? _selectedDevice;
         private bool _allowClose;
 
-        private const int MaxLogLines = 200;
+        #region 1. KHỞI TẠO GIAO DIỆN & NẠP LỊCH SỬ SQLITE
 
         public MainWindow()
         {
             InitializeComponent();
 
-            _mqttController = new MqttController();
-            _historyManager = new TelemetryHistoryManager();
-
-            _mqttController.TelemetryReceived +=
-                _historyManager.AddTelemetry;
-
-            DgDevices.ItemsSource = _devices;
-            IcDeviceCards.ItemsSource = _devices;
-            CmbDevices.ItemsSource = _devices;
-            LbConsole.ItemsSource = _logMessages;
-
+            // Đăng ký sự kiện từ MqttController
+            _mqttController.TelemetryReceived += _historyManager.AddTelemetry;
             _mqttController.ConnectionStatusChanged += OnConnectionStatusChanged;
             _mqttController.TelemetryReceived += OnTelemetryReceived;
             _mqttController.DeviceStatusReceived += OnDeviceStatusReceived;
             _mqttController.MessageRejected += OnMessageRejected;
+
+            // Ràng buộc dữ liệu UI
+            IcDeviceCards.ItemsSource = _devices;
+            DgDevices.ItemsSource = _devices;
+            LbLogEntries.ItemsSource = _logEntries;
 
             Loaded += MainWindow_Loaded;
             Closing += MainWindow_Closing;
@@ -53,34 +49,116 @@ namespace UDM_21.Dashboard
 
         private void MainWindow_Loaded(object sender, RoutedEventArgs e)
         {
-            var savedDevices = _historyManager.GetLatestMessages();
-            foreach (var message in savedDevices)
+            // Danh sách 5 thiết bị chuẩn của đề tài
+            var defaultDeviceSpecs = new[]
             {
-                MessageValidator.TryParseUtcTimestamp(message.Timestamp, out var timestamp);
+                ("air_quality_01", "sensor", "factory"),
+                ("door_sensor_01", "security", "entrance"),
+                ("power_meter_01", "meter", "main_panel"),
+                ("smart_light_01", "light", "living_room"),
+                ("temp_hum_01", "sensor", "server_room")
+            };
+
+            // Nạp dữ liệu thiết bị gần nhất từ SQLite
+            var savedDevices = _historyManager.GetLatestMessages();
+            var savedDict = savedDevices.ToDictionary(d => d.DeviceId, d => d);
+
+            foreach (var spec in defaultDeviceSpecs)
+            {
                 var item = new DeviceItem
                 {
-                    DeviceId = message.DeviceId,
-                    DeviceType = message.DeviceType,
-                    Location = message.Location,
+                    DeviceId = spec.Item1,
+                    DeviceType = spec.Item2,
+                    Location = spec.Item3,
                     IsOnline = false,
-                    LastSeen = timestamp == default
-                        ? message.Timestamp
-                        : timestamp.ToLocalTime().ToString("G"),
-                    LatestTelemetrySummary = message.DataJson
+                    LastSeen = "Chờ tín hiệu..."
                 };
-                item.UpdateTelemetryData(message.Data);
+
+                if (savedDict.TryGetValue(spec.Item1, out var savedMsg))
+                {
+                    MessageValidator.TryParseUtcTimestamp(savedMsg.Timestamp, out var timestamp);
+                    item.LastSeen = timestamp == default ? savedMsg.Timestamp : timestamp.ToLocalTime().ToString("G");
+                    item.UpdateTelemetryData(savedMsg.Data);
+                }
+                else
+                {
+                    item.UpdateVisuals();
+                }
+
                 _devices.Add(item);
             }
 
-            LogConsole($"[HISTORY] SQLite: {_historyManager.DatabasePath}");
-            LogConsole($"[HISTORY] Đã nạp {savedDevices.Count} thiết bị từ phiên trước.");
+            // Khởi tạo danh mục lọc lịch sử với tùy chọn Tất cả thiết bị và từng thiết bị
+            var filterOptions = new List<HistoryDeviceFilterOption>
+            {
+                new() { DisplayText = "Tất cả thiết bị", DeviceId = null },
+                new() { DisplayText = "Cảm biến chất lượng không khí", DeviceId = "air_quality_01" },
+                new() { DisplayText = "Cảm biến cửa", DeviceId = "door_sensor_01" },
+                new() { DisplayText = "Công tơ điện", DeviceId = "power_meter_01" },
+                new() { DisplayText = "Đèn thông minh", DeviceId = "smart_light_01" },
+                new() { DisplayText = "Nhiệt độ & độ ẩm", DeviceId = "temp_hum_01" }
+            };
+            CmbHistoryFilter.ItemsSource = filterOptions;
+            CmbHistoryFilter.DisplayMemberPath = "DisplayText";
+            CmbHistoryFilter.SelectedIndex = 0;
+
+            if (_devices.Count > 0)
+            {
+                SelectDevice(_devices[0]);
+            }
+
+            UpdateKpis();
+            LogEvent("INFO", $"Đã nạp {savedDevices.Count} bản tin gần nhất từ SQLite: {_historyManager.DatabasePath}");
+
+            // Đưa cửa sổ lên tiền cảnh ngay khi mở
+            Activate();
+            Topmost = true;
+            Topmost = false;
+            Focus();
+
+            // Tự động kích hoạt kết nối broker ban đầu
             BtnConnect_Click(this, new RoutedEventArgs());
+        }
+
+        #endregion
+
+        #region 2. KẾT NỐI & NGẮT KẾT NỐI MQTT BROKER
+
+        private void UpdateConnectionUiState(bool isConnected, bool isConnecting = false)
+        {
+            if (isConnecting)
+            {
+                BtnConnect.Visibility = Visibility.Visible;
+                BtnDisconnect.Visibility = Visibility.Collapsed;
+                BtnConnect.IsEnabled = false;
+                BtnConnect.Content = "Đang kết nối...";
+                DotBrokerStatus.Fill = new SolidColorBrush(Color.FromRgb(0xF5, 0x9E, 0x0B)); // Amber
+                BrokerStatusBadge.Background = new SolidColorBrush(Color.FromRgb(0xFE, 0xF3, 0xC7));
+            }
+            else if (isConnected)
+            {
+                BtnConnect.Visibility = Visibility.Collapsed;
+                BtnDisconnect.Visibility = Visibility.Visible;
+                BtnDisconnect.IsEnabled = true;
+                DotBrokerStatus.Fill = new SolidColorBrush(Color.FromRgb(0x16, 0xA3, 0x4A)); // Green
+                BrokerStatusBadge.Background = new SolidColorBrush(Color.FromRgb(0xDC, 0xFC, 0xE7));
+            }
+            else
+            {
+                BtnConnect.Visibility = Visibility.Visible;
+                BtnDisconnect.Visibility = Visibility.Collapsed;
+                BtnConnect.IsEnabled = true;
+                BtnConnect.Content = "Kết Nối";
+                DotBrokerStatus.Fill = new SolidColorBrush(Color.FromRgb(0xDC, 0x26, 0x26)); // Red
+                BrokerStatusBadge.Background = new SolidColorBrush(Color.FromRgb(0xFE, 0xE2, 0xE2));
+            }
+
+            BtnSendCmd.IsEnabled = isConnected;
         }
 
         private async void BtnConnect_Click(object sender, RoutedEventArgs e)
         {
-            string host = TxtHost.Text.Trim();
-
+            var host = TxtHost.Text.Trim();
             if (string.IsNullOrWhiteSpace(host))
             {
                 ShowError("Broker host không được để trống.");
@@ -93,7 +171,7 @@ namespace UDM_21.Dashboard
                 return;
             }
 
-            BtnConnect.IsEnabled = false;
+            UpdateConnectionUiState(isConnected: false, isConnecting: true);
             try
             {
                 var settings = new MqttConnectionSettings
@@ -107,37 +185,36 @@ namespace UDM_21.Dashboard
                 var topicRoot = TxtTopicRoot.Text.Trim();
 
                 await _mqttController.ConnectAsync(settings, topicRoot);
-                LogConsole(
-                    $"[CONFIG] Topic root: {topicRoot}; TLS: {(settings.UseTls ? "bật" : "tắt")}; " +
-                    $"Authentication: {(string.IsNullOrWhiteSpace(settings.Username) ? "không" : "có")}");
+                LogEvent("MQTT", $"Cấu hình: Broker={host}:{port}; Root={topicRoot}; TLS={(settings.UseTls ? "Bật" : "Tắt")}");
             }
             catch (OperationCanceledException)
             {
+                UpdateConnectionUiState(isConnected: false, isConnecting: false);
                 ShowError("Kết nối MQTT quá thời gian chờ 10 giây.");
             }
             catch (Exception ex)
             {
                 AppLogger.Error("DASHBOARD_CONNECT_FAILED", ex);
+                UpdateConnectionUiState(isConnected: false, isConnecting: false);
                 ShowError($"Không thể kết nối MQTT Broker: {ex.Message}");
-                BtnConnect.IsEnabled = true;
             }
         }
 
         private async void BtnDisconnect_Click(object sender, RoutedEventArgs e)
         {
-            BtnDisconnect.IsEnabled = false;
+            UpdateConnectionUiState(isConnected: false, isConnecting: true);
             try
             {
                 await _mqttController.DisconnectAsync();
-            }
-            catch (OperationCanceledException)
-            {
-                ShowError("Ngắt kết nối MQTT quá thời gian chờ.");
             }
             catch (Exception ex)
             {
                 AppLogger.Error("DASHBOARD_DISCONNECT_FAILED", ex);
                 ShowError($"Không thể ngắt kết nối an toàn: {ex.Message}");
+            }
+            finally
+            {
+                UpdateConnectionUiState(isConnected: false, isConnecting: false);
             }
         }
 
@@ -145,34 +222,56 @@ namespace UDM_21.Dashboard
         {
             Dispatcher.BeginInvoke(() =>
             {
-                LblStatus.Text = $"Trạng thái: {message}";
-
-                if (isConnected)
-                {
-                    LblStatus.Foreground = Brushes.Green;
-                    BtnConnect.IsEnabled = false;
-                    BtnDisconnect.IsEnabled = true;
-                    BtnSendCmd.IsEnabled = true;
-                    LogConsole($"[SYSTEM] {message}");
-                }
-                else
-                {
-                    LblStatus.Foreground = Brushes.Red;
-                    BtnConnect.IsEnabled = true;
-                    BtnDisconnect.IsEnabled = false;
-                    BtnSendCmd.IsEnabled = false;
-                    LogConsole($"[SYSTEM] {message}");
-                }
+                LblStatus.Text = message;
+                bool isConnecting = message.Contains("Đang kết nối") || message.Contains("thử kết nối lại");
+                UpdateConnectionUiState(isConnected, isConnecting);
+                LogEvent(isConnected ? "SUCCESS" : "MQTT", message);
             });
         }
 
-        private void OnTelemetryReceived(Shared.TelemetryMessage msg)
+        private void BtnToggleConfig_Click(object sender, RoutedEventArgs e)
+        {
+            DrawerConfig.Visibility = DrawerConfig.Visibility == Visibility.Visible
+                ? Visibility.Collapsed
+                : Visibility.Visible;
+        }
+
+        private async void BtnSaveAndReconnect_Click(object sender, RoutedEventArgs e)
+        {
+            DrawerConfig.Visibility = Visibility.Collapsed;
+            if (_mqttController.IsConnected)
+            {
+                try
+                {
+                    await _mqttController.DisconnectAsync();
+                }
+                catch (Exception ex)
+                {
+                    AppLogger.Warning("RECONNECT_DISCONNECT_WARN", ex.Message);
+                }
+            }
+            BtnConnect_Click(sender, e);
+        }
+
+        private void ChkTopmost_Click(object sender, RoutedEventArgs e)
+        {
+            Topmost = ChkTopmost.IsChecked == true;
+            if (Topmost)
+            {
+                Activate();
+                Focus();
+            }
+        }
+
+        #endregion
+
+        #region 3. TIẾP NHẬN BẢN TIN MQTT & CẢNH BÁO AN TOÀN
+
+        private void OnTelemetryReceived(TelemetryMessage msg)
         {
             Dispatcher.BeginInvoke(() =>
             {
-                var dev = _devices.FirstOrDefault(
-                    d => d.DeviceId == msg.DeviceId);
-
+                var dev = _devices.FirstOrDefault(d => d.DeviceId == msg.DeviceId);
                 if (dev == null)
                 {
                     dev = new DeviceItem
@@ -182,144 +281,353 @@ namespace UDM_21.Dashboard
                         Location = msg.Location,
                         IsOnline = true
                     };
-
                     _devices.Add(dev);
                 }
 
-                // Retained status có thể đến trước telemetry và tạo DeviceItem chưa đủ metadata.
                 dev.DeviceType = msg.DeviceType;
                 dev.Location = msg.Location;
                 dev.IsOnline = true;
                 dev.LastSeen = DateTime.Now.ToString("T");
                 dev.UpdateTelemetryData(msg.Data);
 
-                var history =
-                    _historyManager.GetHistory(msg.DeviceId);
-
-                dev.LatestTelemetrySummary =
-                    JsonConvert.SerializeObject(msg.Data);
-
-                // Kiểm tra ngưỡng bất thường để cảnh báo
+                // Đánh giá ngưỡng an toàn theo chuẩn công nghiệp
                 bool isWarning = false;
-                string warningDetail = "";
+                string warningDetail = string.Empty;
+                string recommendation = string.Empty;
 
-                if (msg.Data.TryGetValue("temperature", out var tempObj) && double.TryParse(tempObj?.ToString(), out double tempVal) && tempVal > 40.0)
+                if (msg.Data.TryGetValue("temperature", out var tObj) && double.TryParse(tObj?.ToString(), out double temp) && temp > 40.0)
                 {
                     isWarning = true;
-                    warningDetail = $"Nhiệt độ vượt ngưỡng: {tempVal}°C (> 40°C)";
+                    warningDetail = $"Quá nhiệt môi trường: {temp:F1}°C (Ngưỡng an toàn <= 40°C)";
+                    recommendation = "Khuyến nghị: Kiểm tra điều hòa phòng máy chủ, kích hoạt hệ thống làm mát khẩn cấp.";
                 }
-                else if (msg.Data.TryGetValue("power_watt", out var pwrObj) && double.TryParse(pwrObj?.ToString(), out double pwrVal) && pwrVal > 3000.0)
+                else if (msg.Data.TryGetValue("power_watt", out var pObj) && double.TryParse(pObj?.ToString(), out double pwr) && pwr > 3000.0)
                 {
                     isWarning = true;
-                    warningDetail = $"Công suất quá tải: {pwrVal}W (> 3000W)";
+                    warningDetail = $"Quá tải điện năng: {pwr:F1}W (Ngưỡng an toàn <= 3000W)";
+                    recommendation = "Khuyến nghị: Sa thải phụ tải không thiết yếu để tránh sập aptomat tổng.";
                 }
-                else if (msg.Data.TryGetValue("aqi", out var aqiObj) && double.TryParse(aqiObj?.ToString(), out double aqiVal) && aqiVal > 150.0)
+                else if (msg.Data.TryGetValue("aqi", out var aqiObj) && double.TryParse(aqiObj?.ToString(), out double aqi) && aqi > 100.0)
                 {
                     isWarning = true;
-                    warningDetail = $"Chất lượng không khí xấu: AQI {aqiVal} (> 150)";
+                    warningDetail = $"Chất lượng không khí kém: AQI {aqi:F0} (Ngưỡng an toàn <= 100)";
+                    recommendation = "Khuyến nghị: Bật quạt hút khí tươi và hệ thống lọc bụi mịn HEPA ngay.";
+                }
+                else if (msg.Data.TryGetValue("tamper_alert", out var taObj) && taObj is bool bTa && bTa)
+                {
+                    isWarning = true;
+                    warningDetail = "Cảnh báo an ninh: Phát hiện dấu hiệu cạy phá vỏ cảm biến cửa!";
+                    recommendation = "Khuyến nghị: Cử nhân viên an ninh kiểm tra trực tiếp cửa ra vào.";
                 }
 
                 dev.HasWarning = isWarning;
                 dev.WarningMessage = warningDetail;
+                dev.Recommendation = recommendation;
 
                 if (isWarning)
                 {
-                    LogConsole($"🚨 [CẢNH BÁO BẤT THƯỜNG] {msg.DeviceId}: {warningDetail}");
+                    LogEvent("WARN", $"🚨 [{dev.DisplayName}]: {warningDetail}");
                 }
                 else
                 {
-                    LogConsole(
-                        $"[TELEMETRY] {msg.DeviceId}: " +
-                        $"{dev.LatestTelemetrySummary}");
+                    LogEvent("INFO", $"[{dev.DisplayName}]: {dev.LatestTelemetrySummary}");
                 }
 
-                LogConsole(
-                    $"[HISTORY] {msg.DeviceId}: " +
-                    $"Đã lưu {history.Count}/20 dữ liệu gần nhất");
+                UpdateKpis();
 
-                if (DgDevices.SelectedItem is DeviceItem selected && selected.DeviceId == msg.DeviceId)
+                // Cập nhật chi tiết nếu thiết bị này đang được chọn
+                if (_selectedDevice != null && _selectedDevice.DeviceId == dev.DeviceId)
                 {
-                    DgHistory.ItemsSource = history;
+                    RefreshDetailView(dev);
+                }
+
+                // Cập nhật bảng lịch sử nếu đang xem tab Lịch sử
+                if (MainTabs.SelectedIndex == 1)
+                {
+                    RefreshHistoryTable();
                 }
             });
         }
 
-        private void OnDeviceStatusReceived(
-            Shared.DeviceStatusMessage statusMsg)
+        private void OnDeviceStatusReceived(DeviceStatusMessage statusMsg)
         {
             Dispatcher.BeginInvoke(() =>
             {
-                var dev = _devices.FirstOrDefault(
-                    d => d.DeviceId == statusMsg.DeviceId);
+                var dev = _devices.FirstOrDefault(d => d.DeviceId == statusMsg.DeviceId);
+                bool isOnline = string.Equals(statusMsg.Status, "online", StringComparison.OrdinalIgnoreCase);
 
-                if (dev == null)
+                if (dev != null)
                 {
-                    dev = new DeviceItem
+                    dev.IsOnline = isOnline;
+                    dev.LastSeen = DateTime.Now.ToString("T");
+                    if (!isOnline)
                     {
-                        DeviceId = statusMsg.DeviceId,
-                        IsOnline =
-                            statusMsg.Status.ToLower() == "online"
-                    };
-
-                    _devices.Add(dev);
+                        dev.HasWarning = false;
+                    }
                 }
-                else
+
+                UpdateKpis();
+                LogEvent(isOnline ? "SUCCESS" : "ERROR", $"[STATUS LWT] {DeviceDisplayNameResolver.GetFriendlyName(statusMsg.DeviceId)}: {(isOnline ? "ONLINE" : "OFFLINE")}");
+
+                if (_selectedDevice != null && _selectedDevice.DeviceId == statusMsg.DeviceId)
                 {
-                    dev.IsOnline =
-                        statusMsg.Status.ToLower() == "online";
+                    RefreshDetailView(_selectedDevice);
                 }
-
-                dev.LastSeen = DateTime.Now.ToString("T");
-
-                LogConsole(
-                    $"[STATUS] Device {statusMsg.DeviceId} " +
-                    $"is {statusMsg.Status.ToUpper()}");
             });
         }
 
         private void OnMessageRejected(string reason)
         {
-            Dispatcher.BeginInvoke(() => LogConsole($"[MESSAGE REJECTED] {reason}"));
+            Dispatcher.BeginInvoke(() => LogEvent("WARN", $"[LỌC TIN NHẮN] {reason}"));
         }
 
-        // =========================================================================
-        // SỰ KIỆN CHỌN THIẾT BỊ TRÊN DATAGRID - HIỂN THỊ LỊCH SỬ LÊN UI (ISSUE #8)
-        // =========================================================================
-        private void DgDevices_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        private void UpdateKpis()
         {
-            // 1. Kiểm tra sự kiện chọn thiết bị trên DataGrid
-            if (DgDevices.SelectedItem is DeviceItem selected)
+            int total = _devices.Count;
+            int online = _devices.Count(d => d.IsOnline);
+            int warning = _devices.Count(d => d.HasWarning);
+            int offline = _devices.Count(d => !d.IsOnline);
+
+            TxtKpiTotal.Text = total.ToString();
+            TxtKpiOnline.Text = online.ToString();
+            TxtKpiWarning.Text = warning.ToString();
+            TxtKpiOffline.Text = offline.ToString();
+        }
+
+        #endregion
+
+        #region 4. LỰA CHỌN THIẾT BỊ & CẬP NHẬT GIAO DIỆN CHI TIẾT
+
+        public void SelectDevice(DeviceItem dev)
+        {
+            if (dev == null) return;
+
+            foreach (var d in _devices)
             {
-                // Đồng bộ ComboBox (nếu có)
-                if (CmbDevices != null)
-                {
-                    CmbDevices.SelectedItem = selected;
-                }
+                d.IsSelected = (d.DeviceId == dev.DeviceId);
+            }
 
-                // 2. Lấy 20 bản tin lịch sử từ _historyManager dựa vào DeviceId
-                var history = _historyManager.GetHistory(selected.DeviceId);
+            _selectedDevice = dev;
+            RefreshDetailView(dev);
 
-                // 3. Gán danh sách lịch sử vào ItemsSource của DataGrid Lịch sử
-                // Trường hợp file XAML đặt tên DataGrid lịch sử khác 'DgHistory', hãy đổi tên ở đây
-                if (DgHistory != null)
-                {
-                    DgHistory.ItemsSource = history;
-                }
+            // Cập nhật preset command dropdown cho chế độ nâng cao
+            UpdatePresetCommandsForDevice(dev);
+        }
+
+        private void RefreshDetailView(DeviceItem dev)
+        {
+            TxtDetailDisplayName.Text = dev.DisplayName;
+            TxtDetailCategory.Text = dev.CategoryName;
+            TxtDetailIdAndLocation.Text = $"Vị trí: {dev.LocationFriendly} · Mã thiết bị: {dev.DeviceId}";
+            TxtDetailStatus.Text = dev.StatusText;
+            TxtDetailStatus.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString(dev.StatusColor));
+            BadgeDetailStatus.Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString(dev.StatusBadgeBg));
+            TxtDetailLastSeen.Text = $"Cập nhật lần cuối: {dev.LastSeen}";
+
+            // Cập nhật thông số tab Kỹ thuật
+            if (TxtTechDeviceId != null) TxtTechDeviceId.Text = dev.DeviceId;
+            var topicRoot = TxtTopicRoot?.Text?.Trim();
+            if (string.IsNullOrWhiteSpace(topicRoot)) topicRoot = "udm21_nhom01";
+            if (TxtTechTopic != null) TxtTechTopic.Text = $"{topicRoot}/telemetry/{dev.Location}/{dev.DeviceType}/{dev.DeviceId}";
+            if (TxtTechCmdTopic != null) TxtTechCmdTopic.Text = $"{topicRoot}/command/{dev.Location}/{dev.DeviceType}/{dev.DeviceId}";
+
+            // Hiển thị đồ họa minh họa vector chuyển động của thiết bị được chọn
+            DetailDeviceVisual.Content = dev;
+            var fadeIn = new System.Windows.Media.Animation.DoubleAnimation(0.3, 1.0, TimeSpan.FromMilliseconds(250));
+            DetailDeviceVisual.BeginAnimation(UIElement.OpacityProperty, fadeIn);
+
+            // Banner cảnh báo
+            if (dev.HasWarning)
+            {
+                BannerWarning.Visibility = Visibility.Visible;
+                TxtWarningMessage.Text = dev.WarningMessage;
+                TxtWarningRecommendation.Text = dev.Recommendation;
+            }
+            else
+            {
+                BannerWarning.Visibility = Visibility.Collapsed;
+            }
+
+            // Gán các chỉ số đo lường
+            IcDetailMetrics.ItemsSource = null;
+            IcDetailMetrics.ItemsSource = dev.DetailedMetrics;
+
+            // Tiêu đề điều khiển đơn giản
+            TxtControlDeviceTitle.Text = "Điều khiển";
+
+            // Chuyển đổi hiển thị Panel ngữ cảnh tương ứng với loại thiết bị
+            PanelCtrlLight.Visibility = (dev.DeviceId == "smart_light_01") ? Visibility.Visible : Visibility.Collapsed;
+            PanelCtrlDoor.Visibility = (dev.DeviceId == "door_sensor_01") ? Visibility.Visible : Visibility.Collapsed;
+            PanelCtrlMeter.Visibility = (dev.DeviceId == "power_meter_01") ? Visibility.Visible : Visibility.Collapsed;
+            PanelCtrlAir.Visibility = (dev.DeviceId == "air_quality_01") ? Visibility.Visible : Visibility.Collapsed;
+            PanelCtrlClimate.Visibility = (dev.DeviceId == "temp_hum_01") ? Visibility.Visible : Visibility.Collapsed;
+
+            // Đồng bộ trạng thái slider độ sáng nếu là đèn
+            if (dev.DeviceId == "smart_light_01")
+            {
+                SliderBrightness.Value = dev.Brightness;
+                TxtBrightnessValue.Text = $"{(int)SliderBrightness.Value}%";
+            }
+
+            // Cập nhật dữ liệu thô Raw JSON cho Tab 4
+            TxtRawJson.Text = dev.RawTelemetryData != null && dev.RawTelemetryData.Count > 0
+                ? JsonConvert.SerializeObject(dev.RawTelemetryData, Formatting.Indented)
+                : "{\n  \"message\": \"Chưa có dữ liệu thô\"\n}";
+        }
+
+        private void DeviceCard_Click(object sender, MouseButtonEventArgs e)
+        {
+            if (sender is FrameworkElement fe && fe.DataContext is DeviceItem dev)
+            {
+                SelectDevice(dev);
             }
         }
 
-        private async void BtnSendCmd_Click(
-            object sender,
-            RoutedEventArgs e)
+        private void SelectDeviceButton_Click(object sender, RoutedEventArgs e)
         {
-            if (CmbDevices.SelectedItem is not DeviceItem selectedDev)
+            if (sender is Button btn && btn.Tag is DeviceItem dev)
             {
-                MessageBox.Show(
-                    "Vui lòng chọn thiết bị!",
-                    "Cảnh báo",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Warning);
+                SelectDevice(dev);
+            }
+        }
 
+        private void DgDevices_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (DgDevices.SelectedItem is DeviceItem selected)
+            {
+                SelectDevice(selected);
+            }
+        }
+
+        private void DgDevices_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+        {
+            if (DgDevices.SelectedItem is not DeviceItem device) return;
+
+            var historyWindow = new TelemetryHistoryWindow(device.DeviceId, _historyManager) { Owner = this };
+            historyWindow.ShowDialog();
+            DgHistory.ItemsSource = _historyManager.GetHistory(device.DeviceId);
+        }
+
+        #endregion
+
+        #region 5. ĐIỀU KHIỂN THEO NGỮ CẢNH (CONTEXT-AWARE CONTROL)
+
+        private async void ExecuteDeviceCommand(string command, Dictionary<string, object>? parameters = null)
+        {
+            if (_selectedDevice == null)
+            {
+                ShowError("Vui lòng chọn một thiết bị để điều khiển.");
+                return;
+            }
+
+            parameters ??= new Dictionary<string, object>();
+            LblCommandStatus.Text = "Đang gửi lệnh...";
+            LblCommandStatus.Foreground = Brushes.DarkOrange;
+
+            try
+            {
+                await _mqttController.SendCommandAsync(
+                    _selectedDevice.Location,
+                    _selectedDevice.DeviceType,
+                    _selectedDevice.DeviceId,
+                    command,
+                    parameters);
+
+                LogEvent("CMD", $"Đã gửi lệnh '{command}' tới {_selectedDevice.DisplayName} ({_selectedDevice.DeviceId})");
+                LblCommandStatus.Text = $"Gửi thành công: {command}";
+                LblCommandStatus.Foreground = Brushes.Green;
+            }
+            catch (Exception ex)
+            {
+                AppLogger.Error("COMMAND_EXECUTE_FAILED", ex);
+                LblCommandStatus.Text = $"Lỗi: {ex.Message}";
+                LblCommandStatus.Foreground = Brushes.Red;
+                ShowError($"Không thể thực thi lệnh: {ex.Message}");
+            }
+        }
+
+        // --- ĐÈN THÔNG MINH ---
+        private void BtnLightOn_Click(object sender, RoutedEventArgs e) =>
+            ExecuteDeviceCommand("TOGGLE_POWER", new Dictionary<string, object> { ["state"] = "ON" });
+
+        private void BtnLightOff_Click(object sender, RoutedEventArgs e) =>
+            ExecuteDeviceCommand("TOGGLE_POWER", new Dictionary<string, object> { ["state"] = "OFF" });
+
+        private void SliderBrightness_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+        {
+            if (TxtBrightnessValue != null)
+            {
+                TxtBrightnessValue.Text = $"{(int)e.NewValue}%";
+            }
+        }
+
+        private void BtnBrightnessPreset_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is Button btn && int.TryParse(btn.Tag?.ToString(), out int val))
+            {
+                SliderBrightness.Value = val;
+                ExecuteDeviceCommand("SET_BRIGHTNESS", new Dictionary<string, object> { ["brightness"] = val });
+            }
+        }
+
+        // --- CẢM BIẾN CỬA ---
+        private void BtnDoorOpen_Click(object sender, RoutedEventArgs e) =>
+            ExecuteDeviceCommand("OPEN_DOOR");
+
+        private void BtnDoorClose_Click(object sender, RoutedEventArgs e) =>
+            ExecuteDeviceCommand("CLOSE_DOOR");
+
+        private void BtnDoorTriggerAlarm_Click(object sender, RoutedEventArgs e) =>
+            ExecuteDeviceCommand("TRIGGER_ALARM");
+
+        private void BtnDoorClearAlarm_Click(object sender, RoutedEventArgs e) =>
+            ExecuteDeviceCommand("CLEAR_ALARM");
+
+        // --- CÔNG TƠ ĐIỆN ---
+        private void BtnMeterLoad500_Click(object sender, RoutedEventArgs e) =>
+            ExecuteDeviceCommand("SET_LOAD", new Dictionary<string, object> { ["power_watt"] = 500.0 });
+
+        private void BtnMeterLoad2000_Click(object sender, RoutedEventArgs e) =>
+            ExecuteDeviceCommand("SET_LOAD", new Dictionary<string, object> { ["power_watt"] = 2000.0 });
+
+        private void BtnMeterOverload_Click(object sender, RoutedEventArgs e) =>
+            ExecuteDeviceCommand("TRIGGER_OVERLOAD");
+
+        private void BtnMeterResetEnergy_Click(object sender, RoutedEventArgs e) =>
+            ExecuteDeviceCommand("RESET_ENERGY");
+
+        // --- CẢM BIẾN CHẤT LƯỢNG KHÔNG KHÍ ---
+        private void BtnAirPurify_Click(object sender, RoutedEventArgs e) =>
+            ExecuteDeviceCommand("PURIFY_AIR");
+
+        private void BtnAirAqi85_Click(object sender, RoutedEventArgs e) =>
+            ExecuteDeviceCommand("SET_AQI", new Dictionary<string, object> { ["aqi"] = 85.0 });
+
+        private void BtnAirAqi180_Click(object sender, RoutedEventArgs e) =>
+            ExecuteDeviceCommand("SET_AQI", new Dictionary<string, object> { ["aqi"] = 180.0 });
+
+        private void BtnAirTriggerAlarm_Click(object sender, RoutedEventArgs e) =>
+            ExecuteDeviceCommand("TRIGGER_POLLUTION_ALERT");
+
+        // --- CẢM BIẾN NHIỆT & ẨM ---
+        private void BtnClimateTemp22_Click(object sender, RoutedEventArgs e) =>
+            ExecuteDeviceCommand("SET_TEMPERATURE", new Dictionary<string, object> { ["temperature"] = 22.0 });
+
+        private void BtnClimateTemp28_Click(object sender, RoutedEventArgs e) =>
+            ExecuteDeviceCommand("SET_TEMPERATURE", new Dictionary<string, object> { ["temperature"] = 28.0 });
+
+        private void BtnClimateHeatAlert_Click(object sender, RoutedEventArgs e) =>
+            ExecuteDeviceCommand("TRIGGER_HEAT_ALERT");
+
+        private void BtnClimateCalibrate_Click(object sender, RoutedEventArgs e) =>
+            ExecuteDeviceCommand("CALIBRATE");
+
+        // --- ĐIỀU KHIỂN NÂNG CAO (MQTT DEVELOPER COMMAND) ---
+        private async void BtnSendCmd_Click(object sender, RoutedEventArgs e)
+        {
+            if (_selectedDevice == null)
+            {
+                ShowError("Vui lòng chọn thiết bị!");
                 return;
             }
 
@@ -333,25 +641,21 @@ namespace UDM_21.Dashboard
             BtnSendCmd.IsEnabled = false;
             LblCommandStatus.Text = "Đang gửi lệnh...";
             LblCommandStatus.Foreground = Brushes.DarkOrange;
+
             try
             {
-                var paramsDict =
-                    JsonConvert.DeserializeObject<
-                        Dictionary<string, object>>(
-                            TxtParams.Text.Trim())
+                var paramsDict = JsonConvert.DeserializeObject<Dictionary<string, object>>(TxtParams.Text.Trim())
                     ?? new Dictionary<string, object>();
 
                 await _mqttController.SendCommandAsync(
-                    selectedDev.Location,
-                    selectedDev.DeviceType,
-                    selectedDev.DeviceId,
+                    _selectedDevice.Location,
+                    _selectedDevice.DeviceType,
+                    _selectedDevice.DeviceId,
                     cmd,
                     paramsDict);
 
-                LogConsole(
-                    $"[COMMAND SENT] To " +
-                    $"{selectedDev.DeviceId}: {cmd}");
-                LblCommandStatus.Text = $"Gửi thành công tới {selectedDev.DeviceId}.";
+                LogEvent("CMD", $"Gửi lệnh tùy chỉnh tới {_selectedDevice.DisplayName}: {cmd}");
+                LblCommandStatus.Text = $"Gửi thành công: {cmd}";
                 LblCommandStatus.Foreground = Brushes.Green;
             }
             catch (Exception ex)
@@ -363,41 +667,8 @@ namespace UDM_21.Dashboard
             }
             finally
             {
-                BtnSendCmd.IsEnabled = BtnDisconnect.IsEnabled;
+                BtnSendCmd.IsEnabled = _mqttController.IsConnected;
             }
-        }
-
-        private void LogConsole(string message)
-        {
-            Dispatcher.BeginInvoke(() =>
-            {
-                string formattedMessage =
-                    $"[{DateTime.Now:HH:mm:ss}] {message}";
-
-                _logMessages.Add(formattedMessage);
-
-                if (_logMessages.Count > MaxLogLines)
-                {
-                    _logMessages.RemoveAt(0);
-                }
-
-                if (LbConsole.Items.Count > 0)
-                {
-                    LbConsole.ScrollIntoView(
-                        LbConsole.Items[
-                            LbConsole.Items.Count - 1]);
-                }
-            });
-
-            AppLogger.Info("DASHBOARD_EVENT", message);
-        }
-
-        private void CmbDevices_SelectionChanged(object sender, SelectionChangedEventArgs e)
-        {
-            if (CmbDevices.SelectedItem is not DeviceItem selected) return;
-
-            // Tự động load danh sách mẫu lệnh tương ứng cho từng loại thiết bị
-            UpdatePresetCommandsForDevice(selected);
         }
 
         private void UpdatePresetCommandsForDevice(DeviceItem dev)
@@ -412,13 +683,11 @@ namespace UDM_21.Dashboard
                     CmbPresetCommands.Items.Add(new PresetCommandItem("💡 Đảo trạng thái đèn", "TOGGLE_POWER", "{}"));
                     CmbPresetCommands.Items.Add(new PresetCommandItem("☀️ Độ sáng tối đa (100%)", "SET_BRIGHTNESS", "{\"brightness\": 100}"));
                     CmbPresetCommands.Items.Add(new PresetCommandItem("🔅 Độ sáng vừa (50%)", "SET_BRIGHTNESS", "{\"brightness\": 50}"));
-                    CmbPresetCommands.Items.Add(new PresetCommandItem("🌑 Tắt độ sáng (0%)", "SET_BRIGHTNESS", "{\"brightness\": 0}"));
                     break;
 
                 case "door_sensor_01":
                     CmbPresetCommands.Items.Add(new PresetCommandItem("🚪 Mở cửa (OPEN)", "OPEN_DOOR", "{}"));
                     CmbPresetCommands.Items.Add(new PresetCommandItem("🚪 Đóng cửa (CLOSED)", "CLOSE_DOOR", "{}"));
-                    CmbPresetCommands.Items.Add(new PresetCommandItem("🚪 Đảo trạng thái cửa", "TOGGLE_DOOR", "{}"));
                     CmbPresetCommands.Items.Add(new PresetCommandItem("🚨 Kích hoạt cảnh báo cạy phá", "TRIGGER_ALARM", "{}"));
                     CmbPresetCommands.Items.Add(new PresetCommandItem("🛡️ Hủy cảnh báo cạy phá", "CLEAR_ALARM", "{}"));
                     break;
@@ -428,7 +697,7 @@ namespace UDM_21.Dashboard
                     CmbPresetCommands.Items.Add(new PresetCommandItem("🌡️ Đặt nhiệt độ phòng (28°C)", "SET_TEMPERATURE", "{\"temperature\": 28.0}"));
                     CmbPresetCommands.Items.Add(new PresetCommandItem("🔥 Thử nghiệm quá nhiệt (52°C)", "SET_TEMPERATURE", "{\"temperature\": 52.0}"));
                     CmbPresetCommands.Items.Add(new PresetCommandItem("🚨 Kích hoạt cảnh báo nhiệt độ cao", "TRIGGER_HEAT_ALERT", "{}"));
-                    CmbPresetCommands.Items.Add(new PresetCommandItem("⚖️ Hiệu chuẩn cảm biến (Calibrate)", "CALIBRATE", "{}"));
+                    CmbPresetCommands.Items.Add(new PresetCommandItem("⚖️ Hiệu chuẩn cảm biến", "CALIBRATE", "{}"));
                     break;
 
                 case "air_quality_01":
@@ -465,70 +734,151 @@ namespace UDM_21.Dashboard
             }
         }
 
-        private async void QuickToggle_Click(object sender, RoutedEventArgs e)
+        #endregion
+
+        #region 6. WORKSPACE TABS: LỊCH SỬ, NHẬT KÝ & DỮ LIỆU THÔ
+
+        private void RefreshHistoryTable()
         {
-            if (sender is not Button btn || btn.Tag is not DeviceItem dev) return;
-
-            string cmdName = "TOGGLE_POWER";
-            var cmdParams = new Dictionary<string, object>();
-
-            switch (dev.DeviceId)
+            if (CmbHistoryFilter?.SelectedItem is not HistoryDeviceFilterOption filter)
             {
-                case "smart_light_01":
-                    string curLight = "OFF";
-                    if (dev.RawTelemetryData.TryGetValue("state", out var st))
-                    {
-                        curLight = st?.ToString()?.ToUpperInvariant() ?? "OFF";
-                    }
-                    string newLight = curLight == "ON" ? "OFF" : "ON";
-                    cmdName = "TOGGLE_POWER";
-                    cmdParams["state"] = newLight;
-                    break;
-
-                case "door_sensor_01":
-                    cmdName = "TOGGLE_DOOR";
-                    break;
-
-                case "temp_hum_01":
-                    cmdName = "TRIGGER_HEAT_ALERT";
-                    break;
-
-                case "air_quality_01":
-                    cmdName = "PURIFY_AIR";
-                    break;
-
-                case "power_meter_01":
-                    cmdName = "RESET_ENERGY";
-                    break;
+                return;
             }
 
-            try
-            {
-                await _mqttController.SendCommandAsync(
-                    dev.Location,
-                    dev.DeviceType,
-                    dev.DeviceId,
-                    cmdName,
-                    cmdParams);
+            var rawList = _historyManager.GetFilteredHistory(filter.DeviceId, 100);
+            var displayItems = rawList.Select(TelemetryHistoryDisplayItem.FromMessage).ToList();
 
-                LogConsole($"[QUICK CMD] Đã gửi lệnh {cmdName} tới {dev.DeviceId}");
-            }
-            catch (Exception ex)
+            DgHistory.ItemsSource = displayItems;
+            if (TxtHistoryRowCount != null)
             {
-                ShowError($"Không thể gửi lệnh nhanh: {ex.Message}");
+                TxtHistoryRowCount.Text = $"Hiển thị: {displayItems.Count} bản tin";
             }
         }
 
-        private void DgDevices_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+        private void BtnViewSelectedHistory_Click(object sender, RoutedEventArgs e)
         {
-            if (DgDevices.SelectedItem is not DeviceItem device) return;
-
-            var historyWindow = new TelemetryHistoryWindow(device.DeviceId, _historyManager)
+            MainTabs.SelectedIndex = 1; // Chuyển sang Tab Lịch Sử
+            if (_selectedDevice != null && CmbHistoryFilter.ItemsSource is List<HistoryDeviceFilterOption> options)
             {
-                Owner = this
-            };
-            historyWindow.ShowDialog();
-            DgHistory.ItemsSource = _historyManager.GetHistory(device.DeviceId);
+                var match = options.FirstOrDefault(o => o.DeviceId == _selectedDevice.DeviceId);
+                if (match != null)
+                {
+                    CmbHistoryFilter.SelectedItem = match;
+                }
+            }
+            RefreshHistoryTable();
+        }
+
+        private void CmbHistoryFilter_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            RefreshHistoryTable();
+            if (PanelHistoryDetail != null)
+            {
+                PanelHistoryDetail.Visibility = Visibility.Collapsed;
+            }
+        }
+
+        private void BtnRefreshHistory_Click(object sender, RoutedEventArgs e)
+        {
+            RefreshHistoryTable();
+        }
+
+        private void BtnClearSelectedHistory_Click(object sender, RoutedEventArgs e)
+        {
+            if (CmbHistoryFilter.SelectedItem is not HistoryDeviceFilterOption filter) return;
+
+            if (string.IsNullOrEmpty(filter.DeviceId))
+            {
+                var confirm = MessageBox.Show(this,
+                    "Bạn có chắc chắn muốn xóa toàn bộ lịch sử đo lường của TẤT CẢ các thiết bị?",
+                    "Xác nhận xóa", MessageBoxButton.YesNo, MessageBoxImage.Question);
+
+                if (confirm == MessageBoxResult.Yes)
+                {
+                    _historyManager.ClearAll();
+                    RefreshHistoryTable();
+                    if (PanelHistoryDetail != null) PanelHistoryDetail.Visibility = Visibility.Collapsed;
+                    LogEvent("INFO", "Đã xóa toàn bộ lịch sử SQLite của tất cả thiết bị.");
+                }
+            }
+            else
+            {
+                var friendly = DeviceDisplayNameResolver.GetFriendlyName(filter.DeviceId);
+                var confirm = MessageBox.Show(this,
+                    $"Bạn có chắc chắn muốn xóa toàn bộ lịch sử đo lường của '{friendly}' ({filter.DeviceId})?",
+                    "Xác nhận xóa", MessageBoxButton.YesNo, MessageBoxImage.Question);
+
+                if (confirm == MessageBoxResult.Yes)
+                {
+                    _historyManager.ClearHistory(filter.DeviceId);
+                    RefreshHistoryTable();
+                    if (PanelHistoryDetail != null) PanelHistoryDetail.Visibility = Visibility.Collapsed;
+                    LogEvent("INFO", $"Đã xóa lịch sử SQLite của {friendly}.");
+                }
+            }
+        }
+
+        private void DgHistory_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (DgHistory.SelectedItem is TelemetryHistoryDisplayItem item)
+            {
+                PanelHistoryDetail.Visibility = Visibility.Visible;
+                TxtHistoryDetailTitle.Text = $"{item.DisplayName} ({item.DeviceId}) · Nhận lúc: {item.TimestampFormatted}";
+                TxtHistoryDetailJson.Text = item.RawJsonFormatted;
+            }
+            else
+            {
+                PanelHistoryDetail.Visibility = Visibility.Collapsed;
+            }
+        }
+
+        private void BtnCopyHistoryJson_Click(object sender, RoutedEventArgs e)
+        {
+            if (!string.IsNullOrWhiteSpace(TxtHistoryDetailJson.Text))
+            {
+                Clipboard.SetText(TxtHistoryDetailJson.Text);
+                MessageBox.Show(this, "Đã sao chép gói tin JSON vào bộ nhớ tạm (Clipboard).", "Thông báo", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+        }
+
+        private void BtnCloseHistoryDetail_Click(object sender, RoutedEventArgs e)
+        {
+            PanelHistoryDetail.Visibility = Visibility.Collapsed;
+            DgHistory.SelectedItem = null;
+        }
+
+        private void LogEvent(string category, string message)
+        {
+            Dispatcher.BeginInvoke(() =>
+            {
+                _logEntries.Add(new LogEntry(category, message));
+                if (_logEntries.Count > MaxLogLines)
+                {
+                    _logEntries.RemoveAt(0);
+                }
+
+                if (ChkAutoScrollLog?.IsChecked == true && LbLogEntries.Items.Count > 0)
+                {
+                    LbLogEntries.ScrollIntoView(LbLogEntries.Items[^1]);
+                }
+            });
+
+            AppLogger.Info("DASHBOARD_EVENT", $"[{category}] {message}");
+        }
+
+        private void BtnClearLog_Click(object sender, RoutedEventArgs e)
+        {
+            _logEntries.Clear();
+            LogEvent("INFO", "Đã dọn dẹp bộ nhớ nhật ký sự kiện.");
+        }
+
+        private void BtnCopyRawJson_Click(object sender, RoutedEventArgs e)
+        {
+            if (!string.IsNullOrWhiteSpace(TxtRawJson.Text))
+            {
+                Clipboard.SetText(TxtRawJson.Text);
+                MessageBox.Show(this, "Đã sao chép gói tin JSON thô vào bộ nhớ tạm (Clipboard).", "Thông báo", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
         }
 
         private async void MainWindow_Closing(object? sender, CancelEventArgs e)
@@ -537,7 +887,7 @@ namespace UDM_21.Dashboard
 
             e.Cancel = true;
             IsEnabled = false;
-            LblStatus.Text = "Trạng thái: Đang đóng kết nối và giải phóng tài nguyên...";
+            LblStatus.Text = "Đang ngắt kết nối và đóng ứng dụng...";
 
             try
             {
@@ -554,10 +904,12 @@ namespace UDM_21.Dashboard
             }
         }
 
-        private static void ShowError(string message)
+        private void ShowError(string message)
         {
-            MessageBox.Show(message, "Lỗi", MessageBoxButton.OK, MessageBoxImage.Error);
+            MessageBox.Show(this, message, "Thông báo lỗi", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
+
+        #endregion
     }
 
     public class PresetCommandItem
@@ -574,5 +926,13 @@ namespace UDM_21.Dashboard
         }
 
         public override string ToString() => DisplayName;
+    }
+
+    public class HistoryDeviceFilterOption
+    {
+        public string DisplayText { get; set; } = string.Empty;
+        public string? DeviceId { get; set; }
+
+        public override string ToString() => DisplayText;
     }
 }
