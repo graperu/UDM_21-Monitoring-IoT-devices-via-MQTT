@@ -1,6 +1,9 @@
 {
-  "timestamp": "2026-09-06 17:15:33",
+  "timestamp": "2026-09-13 22:51:03",
   "broker": "broker.emqx.io:1883",
+  "topic_root": "udm21_nhom01_test",
+  "tls": false,
+  "authenticated": false,
   "environment": {
     "machine": "graperu",
     "os": "Windows-11-10.0.26200-SP0",
@@ -20,10 +23,10 @@
     "Muc_1_Tai_Nhe_500_msgs": {
       "total_sent": 500,
       "acked_count": 500,
-      "duration_sec": 6.293,
-      "throughput_msg_sec": 79.46,
-      "avg_latency_ms": 3219.04,
-      "p95_latency_ms": 5898.41,
+      "duration_sec": 6.702,
+      "throughput_msg_sec": 74.6,
+      "avg_latency_ms": 3397.23,
+      "p95_latency_ms": 6286.0,
       "success_rate_pct": 100.0,
       "timeout_sec": 15,
       "passed": true
@@ -31,10 +34,10 @@
     "Muc_2_Tai_Nang_2000_msgs": {
       "total_sent": 2000,
       "acked_count": 2000,
-      "duration_sec": 26.016,
-      "throughput_msg_sec": 76.88,
-      "avg_latency_ms": 12953.73,
-      "p95_latency_ms": 24512.8,
+      "duration_sec": 26.829,
+      "throughput_msg_sec": 74.55,
+      "avg_latency_ms": 13447.77,
+      "p95_latency_ms": 25532.83,
       "success_rate_pct": 100.0,
       "timeout_sec": 50.0,
       "passed": true
