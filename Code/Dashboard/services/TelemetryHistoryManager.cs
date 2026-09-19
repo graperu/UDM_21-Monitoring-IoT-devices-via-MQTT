@@ -14,16 +14,25 @@ namespace UDM_21.Dashboard.Services
         public const int DefaultStoredHistoryLimit = 10_000;
         public const int MaxQueryLimit = 1_000;
 
+        public const int DefaultPruneInterval = 32;
+
         private readonly string _connectionString;
         private readonly int _storedHistoryLimit;
+        private readonly int _pruneInterval;
+        private readonly Dictionary<string, int> _insertsSincePrune = new(StringComparer.Ordinal);
         private readonly object _lock = new();
 
         public string DatabasePath { get; }
 
         public TelemetryHistoryManager(
             string? databasePath = null,
-            int storedHistoryLimit = DefaultStoredHistoryLimit)
+            int storedHistoryLimit = DefaultStoredHistoryLimit,
+            int pruneInterval = DefaultPruneInterval)
         {
+            if (pruneInterval < 1)
+                throw new ArgumentOutOfRangeException(nameof(pruneInterval), "pruneInterval phải >= 1.");
+            _pruneInterval = pruneInterval;
+
             if (storedHistoryLimit < VisibleHistoryLimit)
                 throw new ArgumentOutOfRangeException(
                     nameof(storedHistoryLimit),
@@ -46,12 +55,33 @@ namespace UDM_21.Dashboard.Services
 
         public void AddTelemetry(TelemetryMessage message)
         {
-            if (message == null || string.IsNullOrWhiteSpace(message.DeviceId)) return;
-            if (!MessageValidator.TryParseUtcTimestamp(message.Timestamp, out var parsedTimestamp))
+            if (message == null) return;
+            AddTelemetryBatch(new[] { message });
+        }
+
+        public int AddTelemetryBatch(IReadOnlyList<TelemetryMessage> messages)
+        {
+            if (messages == null || messages.Count == 0) return 0;
+
+            var prepared = new List<(TelemetryMessage Message, long Ticks)>(messages.Count);
+            var seenInBatch = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var message in messages)
             {
-                AppLogger.Warning("HISTORY_TIMESTAMP_REJECTED", $"device={message.DeviceId}");
-                return;
+                if (message == null || string.IsNullOrWhiteSpace(message.DeviceId)) continue;
+                if (string.IsNullOrWhiteSpace(message.MessageId) || !seenInBatch.Add(message.MessageId)) continue;
+                if (!MessageValidator.TryParseUtcTimestamp(message.Timestamp, out var parsedTimestamp))
+                {
+                    AppLogger.Warning("HISTORY_TIMESTAMP_REJECTED", $"device={message.DeviceId}");
+                    continue;
+                }
+
+                prepared.Add((message, parsedTimestamp.UtcDateTime.Ticks));
             }
+
+            if (prepared.Count == 0) return 0;
+
+            var inserted = 0;
+            var devicesTouched = new Dictionary<string, int>(StringComparer.Ordinal);
 
             lock (_lock)
             {
@@ -59,7 +89,6 @@ namespace UDM_21.Dashboard.Services
                 {
                     using var connection = OpenConnection();
                     using var transaction = connection.BeginTransaction();
-
                     using (var insert = connection.CreateCommand())
                     {
                         insert.Transaction = transaction;
@@ -69,34 +98,33 @@ namespace UDM_21.Dashboard.Services
                             VALUES
                                 ($message_id, $device_id, $device_type, $location, $timestamp_utc, $timestamp_ticks, $received_at_utc, $data_json);
                             """;
-                        insert.Parameters.AddWithValue("$message_id", message.MessageId);
-                        insert.Parameters.AddWithValue("$device_id", message.DeviceId);
-                        insert.Parameters.AddWithValue("$device_type", message.DeviceType);
-                        insert.Parameters.AddWithValue("$location", message.Location);
-                        insert.Parameters.AddWithValue("$timestamp_utc", message.Timestamp);
-                        insert.Parameters.AddWithValue("$timestamp_ticks", parsedTimestamp.UtcDateTime.Ticks);
-                        insert.Parameters.AddWithValue("$received_at_utc", DateTime.UtcNow.ToString("o"));
-                        insert.Parameters.AddWithValue("$data_json", message.DataJson);
-                        if (insert.ExecuteNonQuery() == 0) return; // Duplicate: no cleanup needed.
-                    }
 
-                    using (var cleanup = connection.CreateCommand())
-                    {
-                        cleanup.Transaction = transaction;
-                        cleanup.CommandText = """
-                            DELETE FROM telemetry_history
-                            WHERE device_id = $device_id
-                              AND message_id NOT IN (
-                                  SELECT message_id
-                                  FROM telemetry_history
-                                  WHERE device_id = $device_id
-                                  ORDER BY timestamp_ticks DESC, received_at_utc DESC
-                                  LIMIT $max_rows
-                              );
-                            """;
-                        cleanup.Parameters.AddWithValue("$device_id", message.DeviceId);
-                        cleanup.Parameters.AddWithValue("$max_rows", _storedHistoryLimit);
-                        cleanup.ExecuteNonQuery();
+                        var pMessageId = insert.Parameters.Add("$message_id", SqliteType.Text);
+                        var pDeviceId = insert.Parameters.Add("$device_id", SqliteType.Text);
+                        var pDeviceType = insert.Parameters.Add("$device_type", SqliteType.Text);
+                        var pLocation = insert.Parameters.Add("$location", SqliteType.Text);
+                        var pTimestamp = insert.Parameters.Add("$timestamp_utc", SqliteType.Text);
+                        var pTicks = insert.Parameters.Add("$timestamp_ticks", SqliteType.Integer);
+                        var pReceivedAt = insert.Parameters.Add("$received_at_utc", SqliteType.Text);
+                        var pDataJson = insert.Parameters.Add("$data_json", SqliteType.Text);
+                        insert.Prepare();
+
+                        foreach (var (message, ticks) in prepared)
+                        {
+                            pMessageId.Value = message.MessageId;
+                            pDeviceId.Value = message.DeviceId;
+                            pDeviceType.Value = message.DeviceType ?? string.Empty;
+                            pLocation.Value = message.Location ?? string.Empty;
+                            pTimestamp.Value = message.Timestamp;
+                            pTicks.Value = ticks;
+                            pReceivedAt.Value = DateTime.UtcNow.ToString("o");
+                            pDataJson.Value = message.DataJson;
+
+                            if (insert.ExecuteNonQuery() == 0) continue;
+                            inserted++;
+                            devicesTouched.TryGetValue(message.DeviceId, out var count);
+                            devicesTouched[message.DeviceId] = count + 1;
+                        }
                     }
 
                     transaction.Commit();
@@ -104,7 +132,91 @@ namespace UDM_21.Dashboard.Services
                 catch (SqliteException ex)
                 {
                     AppLogger.Error("HISTORY_DATABASE_WRITE_FAILED", ex);
+                    return 0;
                 }
+
+                var devicesToPrune = new List<string>();
+                foreach (var pair in devicesTouched)
+                {
+                    _insertsSincePrune.TryGetValue(pair.Key, out var pending);
+                    pending += pair.Value;
+                    if (pending >= _pruneInterval)
+                    {
+                        devicesToPrune.Add(pair.Key);
+                        _insertsSincePrune[pair.Key] = 0;
+                    }
+                    else
+                    {
+                        _insertsSincePrune[pair.Key] = pending;
+                    }
+                }
+
+                if (devicesToPrune.Count > 0) PruneDevicesNoLock(devicesToPrune);
+            }
+
+            return inserted;
+        }
+
+        public void PrunePendingDevices()
+        {
+            lock (_lock)
+            {
+                if (_insertsSincePrune.Count == 0) return;
+                var devices = new List<string>();
+                foreach (var pair in _insertsSincePrune)
+                {
+                    if (pair.Value > 0) devices.Add(pair.Key);
+                }
+
+                _insertsSincePrune.Clear();
+                if (devices.Count > 0) PruneDevicesNoLock(devices);
+            }
+        }
+
+        private void PruneDevicesNoLock(IReadOnlyList<string> deviceIds)
+        {
+            try
+            {
+                using var connection = OpenConnection();
+                using var transaction = connection.BeginTransaction();
+
+                using var count = connection.CreateCommand();
+                count.Transaction = transaction;
+                count.CommandText = "SELECT COUNT(*) FROM telemetry_history WHERE device_id = $device_id;";
+                var pCountDevice = count.Parameters.Add("$device_id", SqliteType.Text);
+
+                using var cleanup = connection.CreateCommand();
+                cleanup.Transaction = transaction;
+
+                cleanup.CommandText = """
+                    DELETE FROM telemetry_history
+                    WHERE device_id = $device_id
+                      AND rowid NOT IN (
+                          SELECT rowid
+                          FROM telemetry_history
+                          WHERE device_id = $device_id
+                          ORDER BY timestamp_ticks DESC, received_at_utc DESC
+                          LIMIT $max_rows
+                      );
+                    """;
+                var pCleanupDevice = cleanup.Parameters.Add("$device_id", SqliteType.Text);
+                cleanup.Parameters.AddWithValue("$max_rows", _storedHistoryLimit);
+
+                foreach (var deviceId in deviceIds)
+                {
+                    pCountDevice.Value = deviceId;
+                    var rows = Convert.ToInt32(count.ExecuteScalar(), CultureInfo.InvariantCulture);
+                    if (rows <= _storedHistoryLimit) continue;
+
+                    pCleanupDevice.Value = deviceId;
+                    cleanup.ExecuteNonQuery();
+                }
+
+                transaction.Commit();
+            }
+            catch (SqliteException ex)
+            {
+                AppLogger.Error("HISTORY_DATABASE_PRUNE_FAILED", ex);
             }
         }
 
@@ -311,6 +423,7 @@ namespace UDM_21.Dashboard.Services
                 command.CommandText = "DELETE FROM telemetry_history WHERE device_id = $device_id;";
                 command.Parameters.AddWithValue("$device_id", deviceId);
                 command.ExecuteNonQuery();
+                _insertsSincePrune.Remove(deviceId);
             }
 
             AppLogger.Info("HISTORY_CLEARED", $"device={deviceId}");
@@ -324,6 +437,7 @@ namespace UDM_21.Dashboard.Services
                 using var command = connection.CreateCommand();
                 command.CommandText = "DELETE FROM telemetry_history;";
                 command.ExecuteNonQuery();
+                _insertsSincePrune.Clear();
             }
 
             AppLogger.Info("HISTORY_CLEARED", "scope=all");
@@ -362,7 +476,7 @@ namespace UDM_21.Dashboard.Services
 
         private static void ValidateQueryLimit(int limit)
         {
-            // SQLite treats negative LIMIT as unlimited; never pass that through.
+
             if (limit < 1 || limit > MaxQueryLimit)
                 throw new ArgumentOutOfRangeException(nameof(limit), $"limit phải trong 1..{MaxQueryLimit}.");
         }
