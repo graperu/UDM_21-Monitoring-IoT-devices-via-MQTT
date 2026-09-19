@@ -952,7 +952,7 @@ namespace UDM_21.Dashboard
             {
                 // DisposeAsync may complete synchronously. Queue the final close
                 // so the current Closing event returns before Close runs again.
-                Dispatcher.BeginInvoke(DispatcherPriority.Normal, new Action(() =>
+                _ = Dispatcher.BeginInvoke(DispatcherPriority.Normal, new Action(() =>
                 {
                     _allowClose = true;
                     Close();
