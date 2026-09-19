@@ -9,9 +9,8 @@ namespace UDM_21.Dashboard.Controllers
     public sealed class MqttController : IAsyncDisposable
     {
         private readonly MqttHelper _mqtt;
-        private readonly TelemetryMessageFilter _telemetryFilter = new(100);
-        private readonly MessageDeduplicator _statusDeduplicator = new(100);
-        private readonly TimestampOrderingFilter _statusOrderingFilter = new();
+        private TelemetryMessageFilter _telemetryFilter = new(100);
+        private DeviceStatusFilter _statusFilter = new();
         private string _topicRoot = MqttTopics.DefaultRoot;
 
         // Sự kiện gửi lên giao diện WPF
@@ -43,14 +42,12 @@ namespace UDM_21.Dashboard.Controllers
             ArgumentNullException.ThrowIfNull(settings);
             settings.Validate();
 
-            // Nếu đang kết nối, chủ động ngắt kết nối cũ an toàn trước khi kết nối lại
-            if (_mqtt.IsConnected)
-            {
-                await _mqtt.DisconnectAsync();
-                await Task.Delay(150);
-            }
-
-            _topicRoot = MqttTopics.NormalizeRoot(topicRoot);
+            var normalizedRoot = MqttTopics.NormalizeRoot(topicRoot);
+            // Also cancel a pending reconnect when the broker is currently unreachable.
+            await _mqtt.DisconnectAsync();
+            _topicRoot = normalizedRoot;
+            _telemetryFilter = new TelemetryMessageFilter(100);
+            _statusFilter = new DeviceStatusFilter();
 
             ConnectionStatusChanged?.Invoke(false, "Đang kết nối MQTT Broker...");
             _mqtt.ClearRememberedSubscriptions();
@@ -140,15 +137,8 @@ namespace UDM_21.Dashboard.Controllers
                 return;
             }
 
-            // 3. Chống trùng bản tin status
-            if (!_statusDeduplicator.TryAccept(status.MessageId))
-            {
-                Reject($"Duplicate status message: {status.MessageId}");
-                return;
-            }
-
-            // 4. Kiểm tra thứ tự thời gian của thiết bị
-            if (!_statusOrderingFilter.TryAccept(status.DeviceId, status.Timestamp, out error))
+            // LWT ordering uses the connection epoch, not its prebuilt timestamp.
+            if (!_statusFilter.TryAccept(status, out error))
             {
                 Reject(error);
                 return;
