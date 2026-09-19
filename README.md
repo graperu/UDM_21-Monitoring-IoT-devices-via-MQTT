@@ -1,5 +1,10 @@
 # UDM_21: Giám Sát & Điều Khiển Thiết Bị IoT Qua Giao Thức MQTT (C# .NET 8 WPF)
 
+> **Rà soát ngày 15/09/2026:** Xem [báo cáo sửa lỗi và đối chiếu đề bài](DOCX/RaSoat_ToiUu_UDM21.md).
+> Bản chỉnh sửa này chưa được build/chạy WPF hoặc xUnit trong môi trường rà soát (không có .NET SDK).
+> Các số liệu PASS/benchmark bên dưới là thông tin của bản gốc, không xác nhận cho bản hiện tại.
+
+
 > **Mã Đề Tài:** UDM_21  
 > **Tên Đề Tài:** Giám sát thiết bị IoT qua giao thức MQTT.  
 > **Môn Học:** Lập Trình Mạng (Network Programming) - Học kỳ 2, Năm học 2025–2026.  
@@ -72,9 +77,9 @@ Hệ thống tuân thủ kiến trúc mạng phân tán chuẩn, giao tiếp ho�
 |:---|:---|:---|:---|:---|
 | **`smart_light_01`** | Đèn chiếu sáng | `home` | Trạng thái (ON/OFF), Độ sáng (0–100%), Công suất (W) | `TOGGLE_POWER`, `SET_BRIGHTNESS` |
 | **`door_sensor_01`** | An ninh cửa | `lab` | Trạng thái cửa (OPEN/CLOSED), Pin (%), Cảnh báo cạy cửa | `TRIGGER_ALARM`, `CLEAR_ALARM` |
-| **`temp_hum_01`** | Môi trường khí hậu | `lab` | Nhiệt độ (°C), Độ ẩm (%) | `SET_BASE_TEMP`, `FORCE_ALERT` |
-| **`air_quality_01`** | Chất lượng không khí | `factory` | Chỉ số AQI, Nồng độ CO₂ (ppm), Bụi mịn PM2.5 | `SET_BASE_AQI`, `PURIFY_AIR`, `FORCE_ALERT` |
-| **`power_meter_01`** | Đo lường điện năng | `home` | Điện áp (V), Dòng điện (A), Công suất (W), Tổng kWh | `SET_LOAD`, `SIMULATE_OVERLOAD`, `RESET_KWH` |
+| **`temp_hum_01`** | Môi trường khí hậu | `lab` | Nhiệt độ (°C), Độ ẩm (%) | `SET_TEMPERATURE`, `TRIGGER_HEAT_ALERT`, `CALIBRATE` |
+| **`air_quality_01`** | Chất lượng không khí | `factory` | Chỉ số AQI, Nồng độ CO₂ (ppm) | `SET_AQI`, `PURIFY_AIR`, `TRIGGER_POLLUTION_ALERT` |
+| **`power_meter_01`** | Đo lường điện năng | `home` | Điện áp (V), Dòng điện (A), Công suất (W), Tổng kWh | `SET_LOAD`, `TRIGGER_OVERLOAD`, `RESET_KWH` |
 
 ---
 
@@ -171,7 +176,7 @@ Giao diện WPF Dashboard được thiết kế theo phong cách ứng dụng k�
 ## 🛡️ 6. Xử Lý Lỗi, Độ Tin Cậy & Bảo Mật
 
 1. **An Toàn Luồng Giao Diện (WPF Dispatcher Thread-Safety):**
-   - Luồng mạng nền của `MQTTnet` cập nhật dữ liệu lên giao diện qua `Dispatcher.BeginInvoke`, tuyệt đối không gây treo đơ giao diện (UI Freeze).
+   - Luồng mạng nền của `MQTTnet` cập nhật dữ liệu lên giao diện qua `Dispatcher.BeginInvoke`, bảo đảm cập nhật control đúng luồng; truy vấn lịch sử tự động được gom nhịp và chạy nền.
 2. **Bộ Lọc Bản Tin Trùng Lặp (Deduplication Filter):**
    - `MessageDeduplicator` sử dụng `HashSet<string>` kết hợp `Queue<string>` theo dõi 100 `message_id` gần nhất trong bộ nhớ, tự động loại bỏ bản tin bị lặp do cơ chế truyền lại của QoS 1.
 3. **Bộ Lọc Bản Tin Đến Trễ (Out-of-Order Message Filter):**
@@ -303,7 +308,7 @@ Kịch bản kiểm thử đo thông lượng bằng Python (`Extra/scripts/stre
 
 > **Nhận xét:**
 > - Hệ thống đạt **100% tỷ lệ xác nhận gói tin (PUBACK)** ở cả hai mức tải, không xảy ra hiện tượng mất mát dữ liệu hoặc rớt kết nối.
-> - Độ trễ ở mức tải 2.000 gói phản ánh hàng đợi xử lý của Public Broker khi chịu tải dồn dập, cơ chế bất đồng bộ của ứng dụng đảm bảo giao diện WPF không bị đơ giật trong suốt quá trình nhận tải lớn.
+> - Độ trễ ở mức tải 2.000 gói phản ánh hàng đợi xử lý của Public Broker khi chịu tải dồn dập, phép đo PUBACK này không đo hiệu năng hay độ mượt của Dashboard WPF.
 
 ---
 
