@@ -22,10 +22,11 @@ namespace UDM_21.Shared
         {
             if (!MessageValidator.ValidateTelemetry(message, out rejectionReason)) return false;
             MessageValidator.TryParseUtcTimestamp(message.Timestamp, out var timestamp);
+            var messageKey = message.DeviceId + ":" + Guid.Parse(message.MessageId).ToString("N");
 
             lock (_sync)
             {
-                if (_processedMessageIds.Contains(message.MessageId))
+                if (_processedMessageIds.Contains(messageKey))
                 {
                     rejectionReason = $"Duplicate message: {message.MessageId}";
                     return false;
@@ -39,8 +40,8 @@ namespace UDM_21.Shared
                     return false;
                 }
 
-                _processedMessageIds.Add(message.MessageId);
-                _messageOrder.Enqueue(message.MessageId);
+                _processedMessageIds.Add(messageKey);
+                _messageOrder.Enqueue(messageKey);
                 _lastTimestampByDevice[message.DeviceId] = timestamp;
 
                 while (_messageOrder.Count > _maxCacheSize)
