@@ -20,6 +20,7 @@ namespace UDM_21.Dashboard.Controllers
         public event Action<string>? MessageRejected;
 
         public bool IsConnected => _mqtt.IsConnected;
+        public string TopicRoot => _topicRoot;
 
         #region 1. KHỞI TẠO & KẾT NỐI MQTT BROKER
 
