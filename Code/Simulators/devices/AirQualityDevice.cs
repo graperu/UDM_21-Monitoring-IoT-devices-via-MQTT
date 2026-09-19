@@ -46,7 +46,7 @@ namespace UDM_21.Simulators.Devices
             if (cmd.Command == "SET_AQI")
             {
                 if (cmd.Params.TryGetValue("aqi", out var aObj) &&
-                    double.TryParse(aObj?.ToString(), out double newA))
+                    MessageValidator.TryGetFiniteDouble(aObj, out double newA))
                 {
                     _aqi = newA;
                     _forceAlert = false;
