@@ -10,7 +10,7 @@ namespace UDM_21.Shared
     /// </summary>
     public class TelemetryMessage
     {
-        [JsonProperty("message_id")]
+        [JsonProperty("message_id", Required = Required.Always)]
         public string MessageId { get; set; } = Guid.NewGuid().ToString();
 
         [JsonProperty("device_id")]
@@ -22,7 +22,7 @@ namespace UDM_21.Shared
         [JsonProperty("location")]
         public string Location { get; set; } = string.Empty;
 
-        [JsonProperty("timestamp")]
+        [JsonProperty("timestamp", Required = Required.Always)]
         public string Timestamp { get; set; } = DateTime.UtcNow.ToString("o");
 
         [JsonProperty("data")]
@@ -53,7 +53,7 @@ namespace UDM_21.Shared
     /// </summary>
     public class DeviceStatusMessage
     {
-        [JsonProperty("message_id")]
+        [JsonProperty("message_id", Required = Required.Always)]
         public string MessageId { get; set; } = Guid.NewGuid().ToString();
 
         [JsonProperty("device_id")]
@@ -62,8 +62,15 @@ namespace UDM_21.Shared
         [JsonProperty("status")]
         public string Status { get; set; } = "offline"; // "online" hoặc "offline"
 
-        [JsonProperty("timestamp")]
+        [JsonProperty("timestamp", Required = Required.Always)]
         public string Timestamp { get; set; } = DateTime.UtcNow.ToString("o");
+
+        // Identifies one transport connection. LWT is constructed before online status.
+        [JsonProperty("connection_started_at", NullValueHandling = NullValueHandling.Ignore)]
+        public string? ConnectionStartedAt { get; set; }
+
+        [JsonProperty("is_will", DefaultValueHandling = DefaultValueHandling.Ignore)]
+        public bool IsWill { get; set; }
 
         public string ToJson() => JsonConvert.SerializeObject(this);
         public static DeviceStatusMessage? FromJson(string json) =>
@@ -76,13 +83,13 @@ namespace UDM_21.Shared
     /// </summary>
     public class CommandMessage
     {
-        [JsonProperty("message_id")]
+        [JsonProperty("message_id", Required = Required.Always)]
         public string MessageId { get; set; } = Guid.NewGuid().ToString();
 
         [JsonProperty("command")]
         public string Command { get; set; } = string.Empty;
 
-        [JsonProperty("timestamp")]
+        [JsonProperty("timestamp", Required = Required.Always)]
         public string Timestamp { get; set; } = DateTime.UtcNow.ToString("o");
 
         [JsonProperty("params")]
