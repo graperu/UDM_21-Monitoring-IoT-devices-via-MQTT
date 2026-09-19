@@ -22,6 +22,7 @@ namespace UDM_21.Simulators
         private CancellationTokenSource? _cts;
         private Task? _telemetryTask;
         private bool _stopped;
+        private DateTimeOffset _connectionStartedAt;
         private readonly MessageDeduplicator _processedCommandIds = new(100);
 
         #region 1. KHỞI TẠO THIẾT BỊ
@@ -33,13 +34,20 @@ namespace UDM_21.Simulators
             int publishIntervalSeconds = 3,
             string topicRoot = MqttTopics.DefaultRoot)
         {
+            if (!MessageValidator.IsValidIdentifier(deviceId) ||
+                !MessageValidator.IsValidIdentifier(deviceType) ||
+                !MessageValidator.IsValidIdentifier(location))
+                throw new ArgumentException("Định danh thiết bị không hợp lệ.");
+            if (publishIntervalSeconds <= 0)
+                throw new ArgumentOutOfRangeException(nameof(publishIntervalSeconds));
             DeviceId = deviceId;
             DeviceType = deviceType;
             Location = location;
             PublishIntervalSeconds = publishIntervalSeconds;
             TopicRoot = MqttTopics.NormalizeRoot(topicRoot);
 
-            Mqtt = new MqttHelper($"sim_{DeviceId}_{Guid.NewGuid():N}"[..12]);
+            Mqtt = new MqttHelper($"sim{Guid.NewGuid():N}"[..23]);
+            Mqtt.LastWillPayloadFactory = CreateLastWillPayload;
             Mqtt.MessageReceivedAsync += OnMessageReceivedAsync;
             Mqtt.ConnectionChangedAsync += OnMqttConnectionChangedAsync;
         }
@@ -61,17 +69,12 @@ namespace UDM_21.Simulators
             _cts = new CancellationTokenSource();
             _stopped = false;
 
-            // Cấu hình LWT: Khi thiết bị mất kết nối đột ngột, Broker tự động phát bản tin "offline"
-            var lwtStatus = new DeviceStatusMessage
-            {
-                DeviceId = DeviceId,
-                Status = "offline"
-            };
+            // The factory creates a fresh LWT for every connection attempt.
 
             try
             {
                 await Mqtt.SubscribeAsync(CmdTopic);
-                await Mqtt.ConnectAsync(settings, StatusTopic, lwtStatus.ToJson());
+                await Mqtt.ConnectAsync(settings, StatusTopic);
                 Console.WriteLine($"[Device {DeviceId}] Online and active.");
                 AppLogger.Info("DEVICE_STARTED", $"device={DeviceId}; endpoint={settings.Host}:{settings.Port}");
             }
@@ -104,7 +107,8 @@ namespace UDM_21.Simulators
             var offlineStatus = new DeviceStatusMessage
             {
                 DeviceId = DeviceId,
-                Status = "offline"
+                Status = "offline",
+                ConnectionStartedAt = _connectionStartedAt.ToString("O")
             };
 
             if (Mqtt.IsConnected)
@@ -126,6 +130,19 @@ namespace UDM_21.Simulators
             AppLogger.Info("DEVICE_STOPPED", $"device={DeviceId}");
         }
 
+        private string CreateLastWillPayload()
+        {
+            var now = DateTimeOffset.UtcNow;
+            _connectionStartedAt = now > _connectionStartedAt ? now : _connectionStartedAt.AddTicks(1);
+            return new DeviceStatusMessage
+            {
+                DeviceId = DeviceId,
+                Status = "offline",
+                ConnectionStartedAt = _connectionStartedAt.ToString("O"),
+                IsWill = true
+            }.ToJson();
+        }
+
         private async Task OnMqttConnectionChangedAsync(bool isConnected)
         {
             if (isConnected)
@@ -134,7 +151,8 @@ namespace UDM_21.Simulators
                 var onlineStatus = new DeviceStatusMessage
                 {
                     DeviceId = DeviceId,
-                    Status = "online"
+                    Status = "online",
+                    ConnectionStartedAt = _connectionStartedAt.ToString("O")
                 };
                 await Mqtt.PublishAsync(StatusTopic, onlineStatus.ToJson(), MQTTnet.Protocol.MqttQualityOfServiceLevel.AtLeastOnce, retain: true);
                 Console.WriteLine($"[Device {DeviceId}] (Re)connected to Broker - published online status.");
@@ -201,6 +219,11 @@ namespace UDM_21.Simulators
         private Task OnMessageReceivedAsync(string topic, string payload, MQTTnet.Protocol.MqttQualityOfServiceLevel qos, bool retain)
         {
             if (topic != CmdTopic) return Task.CompletedTask;
+            if (retain)
+            {
+                AppLogger.Warning("COMMAND_REJECTED", $"device={DeviceId}; retained command ignored");
+                return Task.CompletedTask;
+            }
 
             // 1. Kiểm tra cú pháp JSON của lệnh
             if (!MessageValidator.TryParseCommand(payload, out var cmd, out var error) || cmd == null)
