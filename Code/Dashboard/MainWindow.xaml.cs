@@ -296,6 +296,7 @@ namespace UDM_21.Dashboard
         {
             Dispatcher.BeginInvoke(() =>
             {
+                if (_isClosing) return;
                 var dev = _devices.FirstOrDefault(d => d.DeviceId == msg.DeviceId);
                 if (dev == null)
                 {
@@ -375,6 +376,7 @@ namespace UDM_21.Dashboard
         {
             Dispatcher.BeginInvoke(() =>
             {
+                if (_isClosing) return;
                 var dev = _devices.FirstOrDefault(d => d.DeviceId == statusMsg.DeviceId);
                 bool isOnline = string.Equals(statusMsg.Status, "online", StringComparison.OrdinalIgnoreCase);
 
