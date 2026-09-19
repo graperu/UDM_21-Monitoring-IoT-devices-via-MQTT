@@ -39,7 +39,7 @@ namespace UDM_21.Simulators.Devices
             if (cmd.Command == "SET_TEMPERATURE")
             {
                 if (cmd.Params.TryGetValue("temperature", out var tObj) &&
-                    double.TryParse(tObj?.ToString(), out double newT))
+                    MessageValidator.TryGetFiniteDouble(tObj, out double newT))
                 {
                     _baseTemp = newT;
                     _forceAlert = false;
