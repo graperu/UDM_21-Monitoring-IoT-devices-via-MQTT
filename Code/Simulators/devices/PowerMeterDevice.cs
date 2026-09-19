@@ -48,8 +48,9 @@ namespace UDM_21.Simulators.Devices
             }
             else if (cmd.Command == "SET_LOAD" || cmd.Command == "SET_POWER")
             {
-                if (cmd.Params.TryGetValue("power_watt", out var pObj) &&
-                    double.TryParse(pObj?.ToString(), out double newP))
+                if ((cmd.Params.TryGetValue("power_watt", out var pObj) ||
+                     cmd.Params.TryGetValue("load_watt", out pObj)) &&
+                    MessageValidator.TryGetFiniteDouble(pObj, out double newP))
                 {
                     _current = Math.Max(0.1, newP / _voltage);
                     _forceOverload = false;
