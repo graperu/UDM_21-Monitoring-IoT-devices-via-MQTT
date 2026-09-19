@@ -32,6 +32,7 @@ namespace UDM_21.Shared
         private CancellationTokenSource? _reconnectCts;
 
         public string ClientId { get; }
+        public Func<string>? LastWillPayloadFactory { get; set; }
         public bool IsConnected => _client.IsConnected;
         public bool IsManualDisconnect => _isManualDisconnect;
 
@@ -206,10 +207,11 @@ namespace UDM_21.Shared
                 builder.WithTlsOptions(options => options.UseTls(true));
             }
 
-            if (!string.IsNullOrEmpty(_lastWillTopic) && !string.IsNullOrEmpty(_lastWillPayload))
+            var willPayload = LastWillPayloadFactory?.Invoke() ?? _lastWillPayload;
+            if (!string.IsNullOrEmpty(_lastWillTopic) && !string.IsNullOrEmpty(willPayload))
             {
                 builder.WithWillTopic(_lastWillTopic)
-                    .WithWillPayload(Encoding.UTF8.GetBytes(_lastWillPayload))
+                    .WithWillPayload(Encoding.UTF8.GetBytes(willPayload))
                     .WithWillQualityOfServiceLevel(MqttQualityOfServiceLevel.AtLeastOnce)
                     .WithWillRetain(true);
             }
@@ -299,14 +301,12 @@ namespace UDM_21.Shared
 
         private void StopReconnectLoop()
         {
-            CancellationTokenSource? reconnectCts;
             lock (_reconnectLock)
             {
-                reconnectCts = _reconnectCts;
+                var reconnectCts = _reconnectCts;
                 _reconnectCts = null;
+                reconnectCts?.Cancel();
             }
-
-            reconnectCts?.Cancel();
         }
 
         private async Task ReconnectLoopAsync(CancellationTokenSource owner)
@@ -340,9 +340,8 @@ namespace UDM_21.Shared
                 lock (_reconnectLock)
                 {
                     if (ReferenceEquals(_reconnectCts, owner)) _reconnectCts = null;
+                    owner.Dispose();
                 }
-
-                owner.Dispose();
             }
         }
 
