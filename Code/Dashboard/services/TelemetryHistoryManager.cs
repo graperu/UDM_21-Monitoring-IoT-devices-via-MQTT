@@ -12,6 +12,7 @@ namespace UDM_21.Dashboard.Services
     {
         public const int VisibleHistoryLimit = 20;
         public const int DefaultStoredHistoryLimit = 10_000;
+        public const int MaxQueryLimit = 1_000;
 
         private readonly string _connectionString;
         private readonly int _storedHistoryLimit;
@@ -46,6 +47,11 @@ namespace UDM_21.Dashboard.Services
         public void AddTelemetry(TelemetryMessage message)
         {
             if (message == null || string.IsNullOrWhiteSpace(message.DeviceId)) return;
+            if (!MessageValidator.TryParseUtcTimestamp(message.Timestamp, out var parsedTimestamp))
+            {
+                AppLogger.Warning("HISTORY_TIMESTAMP_REJECTED", $"device={message.DeviceId}");
+                return;
+            }
 
             lock (_lock)
             {
@@ -68,11 +74,10 @@ namespace UDM_21.Dashboard.Services
                         insert.Parameters.AddWithValue("$device_type", message.DeviceType);
                         insert.Parameters.AddWithValue("$location", message.Location);
                         insert.Parameters.AddWithValue("$timestamp_utc", message.Timestamp);
-                        MessageValidator.TryParseUtcTimestamp(message.Timestamp, out var parsedTimestamp);
                         insert.Parameters.AddWithValue("$timestamp_ticks", parsedTimestamp.UtcDateTime.Ticks);
                         insert.Parameters.AddWithValue("$received_at_utc", DateTime.UtcNow.ToString("o"));
                         insert.Parameters.AddWithValue("$data_json", message.DataJson);
-                        insert.ExecuteNonQuery();
+                        if (insert.ExecuteNonQuery() == 0) return; // Duplicate: no cleanup needed.
                     }
 
                     using (var cleanup = connection.CreateCommand())
@@ -158,6 +163,7 @@ namespace UDM_21.Dashboard.Services
 
         public List<TelemetryMessage> GetAllHistory(int limit = 50)
         {
+            ValidateQueryLimit(limit);
             lock (_lock)
             {
                 try
@@ -190,6 +196,7 @@ namespace UDM_21.Dashboard.Services
 
         public List<TelemetryMessage> GetFilteredHistory(string? deviceId = null, int limit = 50)
         {
+            ValidateQueryLimit(limit);
             if (string.IsNullOrWhiteSpace(deviceId) || deviceId.Equals("ALL", StringComparison.OrdinalIgnoreCase))
             {
                 return GetAllHistory(limit);
@@ -345,9 +352,19 @@ namespace UDM_21.Dashboard.Services
 
                     CREATE INDEX IF NOT EXISTS idx_telemetry_device_time
                     ON telemetry_history(device_id, timestamp_ticks DESC);
+
+                    CREATE INDEX IF NOT EXISTS idx_telemetry_all_time
+                    ON telemetry_history(timestamp_ticks DESC, received_at_utc DESC);
                     """;
                 command.ExecuteNonQuery();
             }
+        }
+
+        private static void ValidateQueryLimit(int limit)
+        {
+            // SQLite treats negative LIMIT as unlimited; never pass that through.
+            if (limit < 1 || limit > MaxQueryLimit)
+                throw new ArgumentOutOfRangeException(nameof(limit), $"limit phải trong 1..{MaxQueryLimit}.");
         }
 
         private SqliteConnection OpenConnection()
