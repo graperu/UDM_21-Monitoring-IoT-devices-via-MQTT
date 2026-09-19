@@ -37,6 +37,20 @@ namespace UDM_21.Dashboard
             Interval = TimeSpan.FromMilliseconds(500)
         };
 
+        private const string ChartDeviceIdTemp = "temp_hum_01";
+        private const string ChartDeviceIdPower = "power_meter_01";
+        private const string ChartDeviceIdAqi = "air_quality_01";
+        private const double ChartThresholdTemp = 40.0;
+        private const double ChartThresholdPower = 3000.0;
+        private const double ChartThresholdAqi = 100.0;
+        private const int ChartMaxBufferedPoints = 200;
+
+        private readonly List<(DateTime Timestamp, double Value)> _chartPointsTemp = new();
+        private readonly List<(DateTime Timestamp, double Value)> _chartPointsPower = new();
+        private readonly List<(DateTime Timestamp, double Value)> _chartPointsAqi = new();
+        private bool _chartsDirty = true;
+        private int _chartPointLimit = 50;
+
         #region 1. KHỞI TẠO GIAO DIỆN & NẠP LỊCH SỬ SQLITE
 
         public MainWindow()
@@ -59,7 +73,8 @@ namespace UDM_21.Dashboard
             Closing += MainWindow_Closing;
             _historyRefreshTimer.Tick += (_, _) =>
             {
-                if (_historyDirty && !_historyLoading && MainTabs.SelectedIndex == 1) RefreshHistoryTable();
+                if (_historyDirty && !_historyLoading && MainTabs.SelectedItem == TabHistory) RefreshHistoryTable();
+                if (_chartsDirty && MainTabs.SelectedItem == TabCharts) RenderCharts();
             };
             _historyRefreshTimer.Start();
         }
@@ -121,6 +136,9 @@ namespace UDM_21.Dashboard
             {
                 SelectDevice(_devices[0]);
             }
+
+            CmbChartRange.SelectedIndex = 1;
+            LoadChartHistory();
 
             UpdateKpis();
             LogEvent("INFO", $"Đã nạp {savedDevices.Count} bản tin gần nhất từ SQLite: {_historyManager.DatabasePath}");
@@ -370,6 +388,7 @@ namespace UDM_21.Dashboard
                 }
 
                 UpdateKpis();
+                TrackChartTelemetry(msg);
 
                 if (_selectedDevice != null && _selectedDevice.DeviceId == dev.DeviceId)
                 {
@@ -796,9 +815,121 @@ namespace UDM_21.Dashboard
             finally { _historyLoading = false; }
         }
 
+        private void TrackChartTelemetry(TelemetryMessage msg)
+        {
+            List<(DateTime Timestamp, double Value)>? buffer = null;
+
+            if (msg.DeviceId == ChartDeviceIdTemp &&
+                msg.Data.TryGetValue("temperature", out var tObj) &&
+                MessageValidator.TryGetFiniteDouble(tObj, out double t))
+            {
+                buffer = _chartPointsTemp;
+                buffer.Add((DateTime.Now, t));
+            }
+            else if (msg.DeviceId == ChartDeviceIdPower &&
+                msg.Data.TryGetValue("power_watt", out var pObj) &&
+                MessageValidator.TryGetFiniteDouble(pObj, out double p))
+            {
+                buffer = _chartPointsPower;
+                buffer.Add((DateTime.Now, p));
+            }
+            else if (msg.DeviceId == ChartDeviceIdAqi &&
+                msg.Data.TryGetValue("aqi", out var aObj) &&
+                MessageValidator.TryGetFiniteDouble(aObj, out double a))
+            {
+                buffer = _chartPointsAqi;
+                buffer.Add((DateTime.Now, a));
+            }
+
+            if (buffer == null) return;
+
+            if (buffer.Count > ChartMaxBufferedPoints)
+                buffer.RemoveRange(0, buffer.Count - ChartMaxBufferedPoints);
+
+            _chartsDirty = true;
+            if (MainTabs.SelectedItem == TabCharts) RenderCharts();
+        }
+
+        private void LoadChartHistory()
+        {
+            PopulateChartBuffer(_chartPointsTemp, ChartDeviceIdTemp, "temperature");
+            PopulateChartBuffer(_chartPointsPower, ChartDeviceIdPower, "power_watt");
+            PopulateChartBuffer(_chartPointsAqi, ChartDeviceIdAqi, "aqi");
+            RenderCharts();
+        }
+
+        private void PopulateChartBuffer(List<(DateTime Timestamp, double Value)> buffer, string deviceId, string dataKey)
+        {
+            buffer.Clear();
+            var history = _historyManager.GetFilteredHistory(deviceId, ChartMaxBufferedPoints);
+            history.Reverse();
+
+            foreach (var msg in history)
+            {
+                if (!msg.Data.TryGetValue(dataKey, out var raw) || !MessageValidator.TryGetFiniteDouble(raw, out double value))
+                    continue;
+
+                var timestamp = MessageValidator.TryParseUtcTimestamp(msg.Timestamp, out var parsed)
+                    ? parsed.LocalDateTime
+                    : DateTime.Now;
+
+                buffer.Add((timestamp, value));
+            }
+        }
+
+        private void RenderCharts()
+        {
+            _chartsDirty = false;
+
+            ChartTemperature.SetSeries(
+                "Nhiệt độ",
+                "°C",
+                new SolidColorBrush(Color.FromRgb(0x25, 0x63, 0xEB)),
+                TakeLastPoints(_chartPointsTemp),
+                ChartThresholdTemp,
+                "Ngưỡng 40°C");
+
+            ChartPower.SetSeries(
+                "Công suất",
+                "W",
+                new SolidColorBrush(Color.FromRgb(0x08, 0x91, 0xB2)),
+                TakeLastPoints(_chartPointsPower),
+                ChartThresholdPower,
+                "Ngưỡng 3000W");
+
+            ChartAqi.SetSeries(
+                "Chỉ số AQI",
+                "AQI",
+                new SolidColorBrush(Color.FromRgb(0xEA, 0x58, 0x0C)),
+                TakeLastPoints(_chartPointsAqi),
+                ChartThresholdAqi,
+                "Ngưỡng 100");
+        }
+
+        private List<(DateTime Timestamp, double Value)> TakeLastPoints(List<(DateTime Timestamp, double Value)> source)
+        {
+            return source.Count <= _chartPointLimit
+                ? new List<(DateTime, double)>(source)
+                : source.GetRange(source.Count - _chartPointLimit, _chartPointLimit);
+        }
+
+        private void CmbChartRange_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (CmbChartRange.SelectedItem is ComboBoxItem item && int.TryParse((string)item.Tag, out int limit))
+            {
+                _chartPointLimit = limit;
+                if (ChartTemperature != null) RenderCharts();
+            }
+        }
+
+        private void BtnRefreshCharts_Click(object sender, RoutedEventArgs e)
+        {
+            LoadChartHistory();
+        }
+
         private void BtnViewSelectedHistory_Click(object sender, RoutedEventArgs e)
         {
-            MainTabs.SelectedIndex = 1;
+            MainTabs.SelectedItem = TabHistory;
             if (_selectedDevice != null && CmbHistoryFilter.ItemsSource is List<HistoryDeviceFilterOption> options)
             {
                 var match = options.FirstOrDefault(o => o.DeviceId == _selectedDevice.DeviceId);
