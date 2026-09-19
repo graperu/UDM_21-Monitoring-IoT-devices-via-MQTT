@@ -2,6 +2,7 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:models="clr-namespace:UDM_21.Dashboard.Models"
+        xmlns:controls="clr-namespace:UDM_21.Dashboard.Controls"
         Title="UDM_21 — Giám sát thiết bị IoT"
         Height="768" Width="1366" MinHeight="680" MinWidth="1100"
         WindowStartupLocation="CenterScreen"
@@ -473,9 +474,50 @@
                 </TabItem>
 
                 <!-- =======================================================
+                     TAB 1B: BIỂU ĐỒ XU HƯỚNG (NHIỆT ĐỘ, CÔNG SUẤT, AQI)
+                     ======================================================= -->
+                <TabItem x:Name="TabCharts" Header="Biểu đồ">
+                    <Grid Background="#FFFFFF">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+
+                        <Border Grid.Row="0" Background="#F8FAFC" BorderBrush="{StaticResource SubtleBorderBrush}" BorderThickness="0,0,0,1" Padding="10,6">
+                            <DockPanel LastChildFill="False">
+                                <StackPanel Orientation="Horizontal" DockPanel.Dock="Left" VerticalAlignment="Center">
+                                    <TextBlock Text="Hiển thị:" FontWeight="SemiBold" FontSize="11.5" VerticalAlignment="Center" Margin="0,0,8,0" Foreground="{StaticResource TextSecondaryBrush}"/>
+                                    <ComboBox x:Name="CmbChartRange" Width="180" Height="26" SelectionChanged="CmbChartRange_SelectionChanged">
+                                        <ComboBoxItem Content="20 điểm gần nhất" Tag="20"/>
+                                        <ComboBoxItem Content="50 điểm gần nhất" Tag="50"/>
+                                        <ComboBoxItem Content="100 điểm gần nhất" Tag="100"/>
+                                        <ComboBoxItem Content="200 điểm gần nhất" Tag="200"/>
+                                    </ComboBox>
+                                    <Button Content="Làm Mới" Height="26" Padding="10,2" Margin="8,0,0,0" Click="BtnRefreshCharts_Click"/>
+                                </StackPanel>
+                                <TextBlock DockPanel.Dock="Right" Text="Đường đứt màu đỏ là ngưỡng cảnh báo của từng chỉ số"
+                                           FontSize="10.5" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center"/>
+                            </DockPanel>
+                        </Border>
+
+                        <Grid Grid.Row="1" Margin="8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+
+                            <controls:TrendChartControl x:Name="ChartTemperature" Grid.Column="0" Margin="4"/>
+                            <controls:TrendChartControl x:Name="ChartPower" Grid.Column="1" Margin="4"/>
+                            <controls:TrendChartControl x:Name="ChartAqi" Grid.Column="2" Margin="4"/>
+                        </Grid>
+                    </Grid>
+                </TabItem>
+
+                <!-- =======================================================
                      TAB 2: LỊCH SỬ (SQLITE TELEMETRY)
                      ======================================================= -->
-                <TabItem Header="Lịch sử">
+                <TabItem x:Name="TabHistory" Header="Lịch sử">
                     <Grid Background="#FFFFFF">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto"/> <!-- Filter & Actions Toolbar -->
