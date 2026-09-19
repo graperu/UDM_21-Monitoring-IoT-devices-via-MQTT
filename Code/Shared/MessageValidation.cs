@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Text.RegularExpressions;
+using System.Text;
 using Newtonsoft.Json;
 
 namespace UDM_21.Shared
@@ -10,7 +11,7 @@ namespace UDM_21.Shared
     {
         private const int MaxPayloadLength = 64 * 1024;
         private static readonly Regex IdentifierPattern =
-            new Regex("^[A-Za-z0-9_-]{1,64}$", RegexOptions.Compiled);
+            new Regex(@"\A[A-Za-z0-9_-]{1,64}\z", RegexOptions.Compiled);
 
         public static bool TryParseTelemetry(
             string json,
@@ -127,6 +128,19 @@ namespace UDM_21.Shared
                 return false;
             }
 
+            if (message.ConnectionStartedAt != null &&
+                !TryParseUtcTimestamp(message.ConnectionStartedAt, out _))
+            {
+                error = "connection_started_at phải là UTC hợp lệ.";
+                return false;
+            }
+            if (message.IsWill && (message.ConnectionStartedAt == null ||
+                !string.Equals(message.Status, "offline", StringComparison.OrdinalIgnoreCase)))
+            {
+                error = "LWT phải là offline và có connection_started_at.";
+                return false;
+            }
+
             if (!string.Equals(message.Status, "online", StringComparison.OrdinalIgnoreCase) &&
                 !string.Equals(message.Status, "offline", StringComparison.OrdinalIgnoreCase))
             {
@@ -238,7 +252,7 @@ namespace UDM_21.Shared
                     if (cmd == "SET_BRIGHTNESS")
                     {
                         if (!parameters.TryGetValue("brightness", out var value) ||
-                            !int.TryParse(Convert.ToString(value, CultureInfo.InvariantCulture), out var brightness) ||
+                            !int.TryParse(Convert.ToString(value, CultureInfo.InvariantCulture), NumberStyles.Integer, CultureInfo.InvariantCulture, out var brightness) ||
                             brightness < 0 || brightness > 100)
                         {
                             error = "brightness phải là số nguyên trong khoảng 0..100.";
@@ -258,7 +272,12 @@ namespace UDM_21.Shared
                     }
                     if (cmd == "SET_DOOR_STATE")
                     {
-                        if (parameters.TryGetValue("door_state", out var dsVal))
+                        if (!parameters.TryGetValue("door_state", out var dsVal))
+                        {
+                            error = "SET_DOOR_STATE yêu cầu door_state là OPEN hoặc CLOSED.";
+                            return false;
+                        }
+                        else
                         {
                             var ds = dsVal?.ToString();
                             if (!string.Equals(ds, "OPEN", StringComparison.OrdinalIgnoreCase) &&
@@ -283,7 +302,7 @@ namespace UDM_21.Shared
                     if (cmd == "SET_TEMPERATURE")
                     {
                         if (!parameters.TryGetValue("temperature", out var tVal) ||
-                            !double.TryParse(Convert.ToString(tVal, CultureInfo.InvariantCulture), out var temp) ||
+                            !TryGetFiniteDouble(tVal, out var temp) ||
                             temp < -40 || temp > 100)
                         {
                             error = "temperature phải là số trong khoảng -40..100°C.";
@@ -300,7 +319,7 @@ namespace UDM_21.Shared
                     if (cmd == "SET_AQI")
                     {
                         if (!parameters.TryGetValue("aqi", out var aVal) ||
-                            !double.TryParse(Convert.ToString(aVal, CultureInfo.InvariantCulture), out var aqi) ||
+                            !TryGetFiniteDouble(aVal, out var aqi) ||
                             aqi < 0 || aqi > 500)
                         {
                             error = "aqi phải là số trong khoảng 0..500.";
@@ -332,7 +351,7 @@ namespace UDM_21.Shared
                     {
                         if (!parameters.TryGetValue("power_watt", out var pVal) &&
                             !parameters.TryGetValue("load_watt", out pVal) ||
-                            !double.TryParse(Convert.ToString(pVal, CultureInfo.InvariantCulture), out var pwr) ||
+                            !TryGetFiniteDouble(pVal, out var pwr) ||
                             pwr < 0 || pwr > 10000)
                         {
                             error = "power_watt/load_watt phải là số trong khoảng 0..10000W.";
@@ -353,6 +372,16 @@ namespace UDM_21.Shared
                     error = $"Thiết bị loại '{deviceType}' chưa hỗ trợ lệnh điều khiển.";
                     return false;
             }
+        }
+
+        // MQTT JSON uses a dot as decimal separator, regardless of Windows locale.
+        public static bool TryGetFiniteDouble(object? value, out double result)
+        {
+            result = 0;
+            if (value == null || value is bool) return false;
+            return double.TryParse(Convert.ToString(value, CultureInfo.InvariantCulture),
+                       NumberStyles.Float, CultureInfo.InvariantCulture, out result)
+                   && double.IsFinite(result);
         }
 
         public static bool TryParseUtcTimestamp(string value, out DateTimeOffset timestamp)
@@ -398,7 +427,7 @@ namespace UDM_21.Shared
                 return false;
             }
 
-            if (json.Length > MaxPayloadLength)
+            if (Encoding.UTF8.GetByteCount(json) > MaxPayloadLength)
             {
                 error = $"Payload vượt quá giới hạn {MaxPayloadLength} byte.";
                 return false;
