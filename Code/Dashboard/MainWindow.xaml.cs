@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Linq;
+using System.Threading.Tasks;
+using System.Windows.Threading;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -24,6 +26,14 @@ namespace UDM_21.Dashboard
         private readonly TelemetryHistoryManager _historyManager = new();
         private DeviceItem? _selectedDevice;
         private bool _allowClose;
+        private bool _isClosing;
+        private bool _historyDirty = true;
+        private bool _historyLoading;
+        private int _historyRequestVersion;
+        private readonly DispatcherTimer _historyRefreshTimer = new()
+        {
+            Interval = TimeSpan.FromMilliseconds(500)
+        };
 
         #region 1. KHỞI TẠO GIAO DIỆN & NẠP LỊCH SỬ SQLITE
 
@@ -45,6 +55,11 @@ namespace UDM_21.Dashboard
 
             Loaded += MainWindow_Loaded;
             Closing += MainWindow_Closing;
+            _historyRefreshTimer.Tick += (_, _) =>
+            {
+                if (_historyDirty && !_historyLoading && MainTabs.SelectedIndex == 1) RefreshHistoryTable();
+            };
+            _historyRefreshTimer.Start();
         }
 
         private void MainWindow_Loaded(object sender, RoutedEventArgs e)
@@ -53,10 +68,10 @@ namespace UDM_21.Dashboard
             var defaultDeviceSpecs = new[]
             {
                 ("air_quality_01", "sensor", "factory"),
-                ("door_sensor_01", "security", "entrance"),
-                ("power_meter_01", "meter", "main_panel"),
-                ("smart_light_01", "light", "living_room"),
-                ("temp_hum_01", "sensor", "server_room")
+                ("door_sensor_01", "security", "lab"),
+                ("power_meter_01", "meter", "home"),
+                ("smart_light_01", "light", "home"),
+                ("temp_hum_01", "sensor", "lab")
             };
 
             // Nạp dữ liệu thiết bị gần nhất từ SQLite
@@ -225,6 +240,16 @@ namespace UDM_21.Dashboard
                 LblStatus.Text = message;
                 bool isConnecting = message.Contains("Đang kết nối") || message.Contains("thử kết nối lại");
                 UpdateConnectionUiState(isConnected, isConnecting);
+                if (!isConnected)
+                {
+                    foreach (var device in _devices)
+                    {
+                        device.IsOnline = false;
+                        device.HasWarning = false;
+                    }
+                    UpdateKpis();
+                    if (_selectedDevice != null) RefreshDetailView(_selectedDevice);
+                }
                 LogEvent(isConnected ? "SUCCESS" : "MQTT", message);
             });
         }
@@ -290,24 +315,24 @@ namespace UDM_21.Dashboard
                 dev.LastSeen = DateTime.Now.ToString("T");
                 dev.UpdateTelemetryData(msg.Data);
 
-                // Đánh giá ngưỡng an toàn theo chuẩn công nghiệp
+                // Ngưỡng minh họa cho đồ án, không phải tiêu chuẩn an toàn công nghiệp.
                 bool isWarning = false;
                 string warningDetail = string.Empty;
                 string recommendation = string.Empty;
 
-                if (msg.Data.TryGetValue("temperature", out var tObj) && double.TryParse(tObj?.ToString(), out double temp) && temp > 40.0)
+                if (msg.Data.TryGetValue("temperature", out var tObj) && MessageValidator.TryGetFiniteDouble(tObj, out double temp) && temp > 40.0)
                 {
                     isWarning = true;
                     warningDetail = $"Quá nhiệt môi trường: {temp:F1}°C (Ngưỡng an toàn <= 40°C)";
                     recommendation = "Khuyến nghị: Kiểm tra điều hòa phòng máy chủ, kích hoạt hệ thống làm mát khẩn cấp.";
                 }
-                else if (msg.Data.TryGetValue("power_watt", out var pObj) && double.TryParse(pObj?.ToString(), out double pwr) && pwr > 3000.0)
+                else if (msg.Data.TryGetValue("power_watt", out var pObj) && MessageValidator.TryGetFiniteDouble(pObj, out double pwr) && pwr > 3000.0)
                 {
                     isWarning = true;
                     warningDetail = $"Quá tải điện năng: {pwr:F1}W (Ngưỡng an toàn <= 3000W)";
                     recommendation = "Khuyến nghị: Sa thải phụ tải không thiết yếu để tránh sập aptomat tổng.";
                 }
-                else if (msg.Data.TryGetValue("aqi", out var aqiObj) && double.TryParse(aqiObj?.ToString(), out double aqi) && aqi > 100.0)
+                else if (msg.Data.TryGetValue("aqi", out var aqiObj) && MessageValidator.TryGetFiniteDouble(aqiObj, out double aqi) && aqi > 100.0)
                 {
                     isWarning = true;
                     warningDetail = $"Chất lượng không khí kém: AQI {aqi:F0} (Ngưỡng an toàn <= 100)";
@@ -341,11 +366,8 @@ namespace UDM_21.Dashboard
                     RefreshDetailView(dev);
                 }
 
-                // Cập nhật bảng lịch sử nếu đang xem tab Lịch sử
-                if (MainTabs.SelectedIndex == 1)
-                {
-                    RefreshHistoryTable();
-                }
+                // Coalesce incoming updates; read SQLite at most once per timer tick.
+                _historyDirty = true;
             });
         }
 
@@ -426,10 +448,9 @@ namespace UDM_21.Dashboard
 
             // Cập nhật thông số tab Kỹ thuật
             if (TxtTechDeviceId != null) TxtTechDeviceId.Text = dev.DeviceId;
-            var topicRoot = TxtTopicRoot?.Text?.Trim();
-            if (string.IsNullOrWhiteSpace(topicRoot)) topicRoot = "udm21_nhom01";
-            if (TxtTechTopic != null) TxtTechTopic.Text = $"{topicRoot}/telemetry/{dev.Location}/{dev.DeviceType}/{dev.DeviceId}";
-            if (TxtTechCmdTopic != null) TxtTechCmdTopic.Text = $"{topicRoot}/command/{dev.Location}/{dev.DeviceType}/{dev.DeviceId}";
+            var topicRoot = _mqttController.TopicRoot;
+            if (TxtTechTopic != null) TxtTechTopic.Text = MqttTopics.Telemetry(topicRoot, dev.Location, dev.DeviceType, dev.DeviceId);
+            if (TxtTechCmdTopic != null) TxtTechCmdTopic.Text = MqttTopics.Command(topicRoot, dev.Location, dev.DeviceType, dev.DeviceId);
 
             // Hiển thị đồ họa minh họa vector chuyển động của thiết bị được chọn
             DetailDeviceVisual.Content = dev;
@@ -449,8 +470,8 @@ namespace UDM_21.Dashboard
             }
 
             // Gán các chỉ số đo lường
-            IcDetailMetrics.ItemsSource = null;
-            IcDetailMetrics.ItemsSource = dev.DetailedMetrics;
+            if (!ReferenceEquals(IcDetailMetrics.ItemsSource, dev.DetailedMetrics))
+                IcDetailMetrics.ItemsSource = dev.DetailedMetrics;
 
             // Tiêu đề điều khiển đơn giản
             TxtControlDeviceTitle.Text = "Điều khiển";
@@ -463,7 +484,7 @@ namespace UDM_21.Dashboard
             PanelCtrlClimate.Visibility = (dev.DeviceId == "temp_hum_01") ? Visibility.Visible : Visibility.Collapsed;
 
             // Đồng bộ trạng thái slider độ sáng nếu là đèn
-            if (dev.DeviceId == "smart_light_01")
+            if (dev.DeviceId == "smart_light_01" && !SliderBrightness.IsMouseCaptureWithin)
             {
                 SliderBrightness.Value = dev.Brightness;
                 TxtBrightnessValue.Text = $"{(int)SliderBrightness.Value}%";
@@ -505,7 +526,7 @@ namespace UDM_21.Dashboard
 
             var historyWindow = new TelemetryHistoryWindow(device.DeviceId, _historyManager) { Owner = this };
             historyWindow.ShowDialog();
-            DgHistory.ItemsSource = _historyManager.GetHistory(device.DeviceId);
+            RefreshHistoryTable();
         }
 
         #endregion
@@ -520,6 +541,7 @@ namespace UDM_21.Dashboard
                 return;
             }
 
+            var targetDevice = _selectedDevice;
             parameters ??= new Dictionary<string, object>();
             LblCommandStatus.Text = "Đang gửi lệnh...";
             LblCommandStatus.Foreground = Brushes.DarkOrange;
@@ -527,13 +549,13 @@ namespace UDM_21.Dashboard
             try
             {
                 await _mqttController.SendCommandAsync(
-                    _selectedDevice.Location,
-                    _selectedDevice.DeviceType,
-                    _selectedDevice.DeviceId,
+                    targetDevice.Location,
+                    targetDevice.DeviceType,
+                    targetDevice.DeviceId,
                     command,
                     parameters);
 
-                LogEvent("CMD", $"Đã gửi lệnh '{command}' tới {_selectedDevice.DisplayName} ({_selectedDevice.DeviceId})");
+                LogEvent("CMD", $"Đã gửi lệnh '{command}' tới {targetDevice.DisplayName} ({targetDevice.DeviceId})");
                 LblCommandStatus.Text = $"Gửi thành công: {command}";
                 LblCommandStatus.Foreground = Brushes.Green;
             }
@@ -558,6 +580,21 @@ namespace UDM_21.Dashboard
             if (TxtBrightnessValue != null)
             {
                 TxtBrightnessValue.Text = $"{(int)e.NewValue}%";
+            }
+        }
+
+        private void SliderBrightness_Commit(object sender, MouseButtonEventArgs e)
+        {
+            if (_selectedDevice?.DeviceId == "smart_light_01")
+                ExecuteDeviceCommand("SET_BRIGHTNESS", new Dictionary<string, object> { ["brightness"] = (int)SliderBrightness.Value });
+        }
+
+        private void SliderBrightness_KeyUp(object sender, KeyEventArgs e)
+        {
+            if (e.Key is Key.Left or Key.Right or Key.Up or Key.Down or Key.Home or Key.End or Key.PageUp or Key.PageDown)
+            {
+                if (_selectedDevice?.DeviceId == "smart_light_01")
+                    ExecuteDeviceCommand("SET_BRIGHTNESS", new Dictionary<string, object> { ["brightness"] = (int)SliderBrightness.Value });
             }
         }
 
@@ -738,21 +775,30 @@ namespace UDM_21.Dashboard
 
         #region 6. WORKSPACE TABS: LỊCH SỬ, NHẬT KÝ & DỮ LIỆU THÔ
 
-        private void RefreshHistoryTable()
+        private async void RefreshHistoryTable()
         {
-            if (CmbHistoryFilter?.SelectedItem is not HistoryDeviceFilterOption filter)
-            {
-                return;
-            }
+            _historyDirty = true;
+            var requestVersion = ++_historyRequestVersion;
+            if (_historyLoading || _isClosing ||
+                CmbHistoryFilter?.SelectedItem is not HistoryDeviceFilterOption filter) return;
 
-            var rawList = _historyManager.GetFilteredHistory(filter.DeviceId, 100);
-            var displayItems = rawList.Select(TelemetryHistoryDisplayItem.FromMessage).ToList();
-
-            DgHistory.ItemsSource = displayItems;
-            if (TxtHistoryRowCount != null)
+            _historyLoading = true;
+            _historyDirty = false;
+            var deviceId = filter.DeviceId;
+            try
             {
-                TxtHistoryRowCount.Text = $"Hiển thị: {displayItems.Count} bản tin";
+                var displayItems = await Task.Run(() => _historyManager.GetFilteredHistory(deviceId, 100)
+                    .Select(TelemetryHistoryDisplayItem.FromMessage).ToList());
+                if (_isClosing || requestVersion != _historyRequestVersion) return;
+                DgHistory.ItemsSource = displayItems;
+                if (TxtHistoryRowCount != null)
+                    TxtHistoryRowCount.Text = $"Hiển thị: {displayItems.Count} bản tin";
             }
+            catch (Exception ex)
+            {
+                AppLogger.Error("HISTORY_REFRESH_FAILED", ex);
+            }
+            finally { _historyLoading = false; }
         }
 
         private void BtnViewSelectedHistory_Click(object sender, RoutedEventArgs e)
@@ -886,6 +932,9 @@ namespace UDM_21.Dashboard
             if (_allowClose) return;
 
             e.Cancel = true;
+            if (_isClosing) return;
+            _isClosing = true;
+            _historyRefreshTimer.Stop();
             IsEnabled = false;
             LblStatus.Text = "Đang ngắt kết nối và đóng ứng dụng...";
 
@@ -899,8 +948,13 @@ namespace UDM_21.Dashboard
             }
             finally
             {
-                _allowClose = true;
-                Close();
+                // DisposeAsync may complete synchronously. Queue the final close
+                // so the current Closing event returns before Close runs again.
+                Dispatcher.BeginInvoke(DispatcherPriority.Normal, new Action(() =>
+                {
+                    _allowClose = true;
+                    Close();
+                }));
             }
         }
 
