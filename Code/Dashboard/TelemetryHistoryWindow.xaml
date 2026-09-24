@@ -13,7 +13,7 @@
         </Grid.RowDefinitions>
 
         <!-- Header -->
-        <Border Grid.Row="0" Background="#FFFFFF" CornerRadius="8" BorderBrush="{StaticResource CardBorderBrush}" BorderThickness="1" Padding="14,10" Margin="0,0,0,12">
+        <Border Grid.Row="0" Background="#FFFFFF" CornerRadius="8" BorderBrush="{StaticResource PanelBorderBrush}" BorderThickness="1" Padding="14,10" Margin="0,0,0,12">
             <DockPanel LastChildFill="False">
                 <StackPanel DockPanel.Dock="Left">
                     <TextBlock x:Name="LblTitle" FontSize="16" FontWeight="Bold" Foreground="{StaticResource TextPrimaryBrush}" Text="Lịch Sử Đo Lường"/>
