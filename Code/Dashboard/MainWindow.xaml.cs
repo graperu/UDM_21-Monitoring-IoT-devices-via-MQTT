@@ -1,4 +1,7 @@
 using System;
+using System.IO;
+using System.Text;
+using Microsoft.Win32;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
@@ -29,6 +32,7 @@ namespace UDM_21.Dashboard
         private long _lastReportedDropCount;
         private DeviceItem? _selectedDevice;
         private bool _allowClose;
+        private bool _exportingHistory;
         private ListCollectionView? _deviceView;
         private bool _commandBusy;
         private bool _isClosing;
@@ -458,6 +462,7 @@ namespace UDM_21.Dashboard
         {
             if (_deviceView == null || TxtDeviceResults == null) return;
             _deviceView.Refresh();
+            UpdateSummarySelection();
             TxtDeviceResults.Text = _deviceView.Count == 0
                 ? "Không tìm thấy thiết bị. Hãy đổi từ khóa hoặc bộ lọc."
                 : $"Hiển thị {_deviceView.Count} / {_devices.Count} thiết bị";
@@ -490,6 +495,112 @@ namespace UDM_21.Dashboard
             else if (enabled && (LblCommandStatus.Text.StartsWith("Kết nối broker") ||
                                  LblCommandStatus.Text.StartsWith("Thiết bị offline")))
                 LblCommandStatus.Text = "Sẵn sàng nhận lệnh";
+        }
+
+        private void SummaryFilter_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is Button button && int.TryParse(button.Tag?.ToString(), out var index))
+            {
+                TxtDeviceSearch.Clear();
+                CmbDeviceStatus.SelectedIndex = index;
+                RefreshDeviceFilter();
+            }
+        }
+
+        private void ClearDeviceFilter_Click(object sender, RoutedEventArgs e)
+        {
+            TxtDeviceSearch.Clear();
+            CmbDeviceStatus.SelectedIndex = 0;
+            RefreshDeviceFilter();
+            TxtDeviceSearch.Focus();
+        }
+
+        private void Window_PreviewKeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.Key == Key.F && Keyboard.Modifiers == ModifierKeys.Control)
+            {
+                TxtDeviceSearch.Focus();
+                TxtDeviceSearch.SelectAll();
+                e.Handled = true;
+            }
+            else if (e.Key == Key.Escape && TxtDeviceSearch.IsKeyboardFocusWithin)
+            {
+                ClearDeviceFilter_Click(sender, e);
+                e.Handled = true;
+            }
+        }
+
+        private void UpdateSummarySelection()
+        {
+            var cards = new[] { SummaryCard0, SummaryCard1, SummaryCard2, SummaryCard3 };
+            for (var i = 0; i < cards.Length; i++)
+            {
+                if (cards[i] == null) continue;
+                var selected = CmbDeviceStatus.SelectedIndex == i;
+                cards[i].BorderBrush = new SolidColorBrush(selected
+                    ? Color.FromRgb(0x25, 0x63, 0xEB) : Color.FromRgb(0xE2, 0xE8, 0xF0));
+                cards[i].Background = new SolidColorBrush(selected
+                    ? Color.FromRgb(0xEF, 0xF6, 0xFF) : Colors.White);
+            }
+        }
+
+        // CSV cells remain text in spreadsheet apps; quotes/newlines round-trip correctly.
+        private static string EscapeCsvCell(string? value)
+        {
+            var text = value ?? string.Empty;
+            var trimmed = text.TrimStart();
+            if (trimmed.Length > 0 && "=+-@".Contains(trimmed[0])) text = "'" + text;
+            return "\"" + text.Replace("\"", "\"\"") + "\"";
+        }
+
+        private async void ExportHistory_Click(object sender, RoutedEventArgs e)
+        {
+            if (_exportingHistory) return;
+            // Capture exactly the current table/order before showing the modal file dialog.
+            var rows = DgHistory.Items.OfType<TelemetryHistoryDisplayItem>().ToList();
+            if (rows.Count == 0)
+            {
+                MessageBox.Show(this, "Chưa có dữ liệu để xuất. Hãy chờ lịch sử tải xong hoặc chọn thiết bị khác.",
+                    "Xuất lịch sử", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+            var csv = new StringBuilder();
+            csv.AppendLine(string.Join(",", new[] { "Thời gian", "Thiết bị", "Mã thiết bị", "Vị trí",
+                "Chỉ số chính", "Chỉ số phụ", "Trạng thái", "Message ID", "Dữ liệu JSON" }.Select(EscapeCsvCell)));
+            foreach (var row in rows)
+                csv.AppendLine(string.Join(",", new[] { row.TimestampFormatted, row.DisplayName,
+                    row.DeviceId, row.LocationFriendly, row.PrimaryValue, row.SecondaryValue,
+                    row.StatusText, row.MessageId, row.RawJsonFormatted }.Select(EscapeCsvCell)));
+
+            var dialog = new SaveFileDialog
+            {
+                Title = $"Xuất {rows.Count} bản tin đang hiển thị",
+                Filter = "CSV (*.csv)|*.csv",
+                DefaultExt = ".csv",
+                AddExtension = true,
+                OverwritePrompt = true,
+                FileName = $"UDM21_history_{DateTime.Now:yyyyMMdd_HHmmss}.csv"
+            };
+            if (dialog.ShowDialog(this) != true) return;
+            _exportingHistory = true;
+            BtnExportHistory.IsEnabled = false;
+            try
+            {
+                await File.WriteAllTextAsync(dialog.FileName, csv.ToString(), new UTF8Encoding(true));
+                LogEvent("INFO", $"Đã xuất {rows.Count} bản tin lịch sử ra CSV.");
+                if (!_isClosing)
+                    MessageBox.Show(this, $"Đã lưu {rows.Count} bản tin vào:\n{dialog.FileName}",
+                        "Xuất CSV thành công", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
+            {
+                if (!_isClosing) ShowError($"Không thể lưu CSV. Kiểm tra quyền ghi hoặc đóng file đang mở.\n{ex.Message}");
+            }
+            finally
+            {
+                _exportingHistory = false;
+                BtnExportHistory.IsEnabled = true;
+            }
         }
 
         private void UpdateKpis()
@@ -991,6 +1102,7 @@ namespace UDM_21.Dashboard
 
         private void CmbHistoryFilter_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
+            if (DgHistory != null) DgHistory.ItemsSource = null;
             RefreshHistoryTable();
             if (PanelHistoryDetail != null)
             {
