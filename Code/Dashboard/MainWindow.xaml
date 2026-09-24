@@ -1,10 +1,10 @@
-<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:models="clr-namespace:UDM_21.Dashboard.Models" xmlns:controls="clr-namespace:UDM_21.Dashboard.Controls" x:Class="UDM_21.Dashboard.MainWindow" Title="UDM_21 — Giám sát thiết bị IoT" Height="900" Width="1440" MinHeight="760" MinWidth="1240" WindowStartupLocation="CenterScreen" Background="{StaticResource AppBgBrush}" FontFamily="{StaticResource AppFont}" UseLayoutRounding="True" TextOptions.TextFormattingMode="Display" PreviewKeyDown="Window_PreviewKeyDown">
+<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:models="clr-namespace:UDM_21.Dashboard.Models" xmlns:controls="clr-namespace:UDM_21.Dashboard.Controls" x:Class="UDM_21.Dashboard.MainWindow" Title="UDM_21 — Giám sát thiết bị IoT" Height="740" Width="1280" MinHeight="420" MinWidth="640" WindowStartupLocation="CenterScreen" Background="{StaticResource AppBgBrush}" FontFamily="{StaticResource AppFont}" UseLayoutRounding="True" TextOptions.TextFormattingMode="Display" PreviewKeyDown="Window_PreviewKeyDown" MaxWidth="{Binding Source={x:Static SystemParameters.WorkArea}, Path=Width}" MaxHeight="{Binding Source={x:Static SystemParameters.WorkArea}, Path=Height}" WindowStyle="SingleBorderWindow" ResizeMode="CanResize" WindowState="Normal" SizeToContent="Manual" AllowsTransparency="False">
 
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVisConverter"/>
     </Window.Resources>
 
-    <Grid>
+    <ScrollViewer x:Name="WindowViewport" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" CanContentScroll="False" Focusable="False"><Grid MinWidth="1240" MinHeight="760" Width="{Binding ViewportWidth, ElementName=WindowViewport}" Height="{Binding ViewportHeight, ElementName=WindowViewport}" HorizontalAlignment="Left" VerticalAlignment="Top">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/> <!-- 0: Simplified Top Bar -->
             <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/> <!-- 1: Collapsible Connection Settings -->
@@ -721,4 +721,4 @@
             </TabControl>
         </Grid>
     </Grid>
-</Window>
+</ScrollViewer></Window>
