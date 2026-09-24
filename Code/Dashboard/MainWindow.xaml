@@ -88,8 +88,8 @@
         <Grid Grid.Row="3" Margin="20,0,20,16">
             <Grid.RowDefinitions>
                 <RowDefinition Height="1.35*" MinHeight="250"/>  <!-- Upper 3-Area: Danh Sách | Thông Tin | Điều Khiển -->
-                <RowDefinition Height="6" MinHeight="170"/>    <!-- GridSplitter -->
-                <RowDefinition Height="*"/>    <!-- Lower Tabs: Thiết Bị | Lịch Sử | Nhật Ký | Kỹ Thuật -->
+                <RowDefinition Height="6" MinHeight="6" MaxHeight="6"/>    <!-- GridSplitter -->
+                <RowDefinition Height="*" MinHeight="180"/>    <!-- Lower Tabs: Thiết Bị | Lịch Sử | Nhật Ký | Kỹ Thuật -->
             </Grid.RowDefinitions>
 
             <!-- ===========================================================
@@ -98,7 +98,7 @@
             <Grid Grid.Row="0">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="330"/> <!-- Left: Danh sách thiết bị -->
-                    <ColumnDefinition Width="310"/>   <!-- Center: Thông tin thiết bị đang chọn -->
+                    <ColumnDefinition Width="*" MinWidth="340"/>   <!-- Center: Thông tin thiết bị đang chọn -->
                     <ColumnDefinition Width="340"/> <!-- Right: Điều khiển thiết bị -->
                 </Grid.ColumnDefinitions>
 
