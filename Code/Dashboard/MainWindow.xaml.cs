@@ -8,6 +8,7 @@ using System.Windows.Threading;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Data;
 using System.Windows.Media;
 using Newtonsoft.Json;
 using UDM_21.Dashboard.Controllers;
@@ -28,6 +29,8 @@ namespace UDM_21.Dashboard
         private long _lastReportedDropCount;
         private DeviceItem? _selectedDevice;
         private bool _allowClose;
+        private ListCollectionView? _deviceView;
+        private bool _commandBusy;
         private bool _isClosing;
         private bool _historyDirty = true;
         private bool _historyLoading;
@@ -65,7 +68,9 @@ namespace UDM_21.Dashboard
             _mqttController.DeviceStatusReceived += OnDeviceStatusReceived;
             _mqttController.MessageRejected += OnMessageRejected;
 
-            IcDeviceCards.ItemsSource = _devices;
+            _deviceView = new ListCollectionView(_devices);
+            _deviceView.Filter = MatchesDeviceFilter;
+            IcDeviceCards.ItemsSource = _deviceView;
             DgDevices.ItemsSource = _devices;
             LbLogEntries.ItemsSource = _logEntries;
 
@@ -184,7 +189,7 @@ namespace UDM_21.Dashboard
                 BrokerStatusBadge.Background = new SolidColorBrush(Color.FromRgb(0xFE, 0xE2, 0xE2));
             }
 
-            BtnSendCmd.IsEnabled = isConnected;
+            UpdateCommandAvailability();
         }
 
         private async void BtnConnect_Click(object sender, RoutedEventArgs e)
@@ -432,6 +437,61 @@ namespace UDM_21.Dashboard
             Dispatcher.BeginInvoke(() => LogEvent("WARN", $"[LỌC TIN NHẮN] {reason}"));
         }
 
+        private bool MatchesDeviceFilter(object item)
+        {
+            if (item is not DeviceItem device) return false;
+            var query = TxtDeviceSearch?.Text.Trim() ?? string.Empty;
+            var matchesText = string.IsNullOrEmpty(query) ||
+                new[] { device.DisplayName, device.DeviceId, device.LocationFriendly, device.Location }
+                    .Any(value => value.Contains(query, StringComparison.CurrentCultureIgnoreCase));
+            var matchesStatus = (CmbDeviceStatus?.SelectedIndex ?? 0) switch
+            {
+                1 => device.IsOnline,
+                2 => device.HasWarning,
+                3 => !device.IsOnline,
+                _ => true
+            };
+            return matchesText && matchesStatus;
+        }
+
+        private void RefreshDeviceFilter()
+        {
+            if (_deviceView == null || TxtDeviceResults == null) return;
+            _deviceView.Refresh();
+            TxtDeviceResults.Text = _deviceView.Count == 0
+                ? "Không tìm thấy thiết bị. Hãy đổi từ khóa hoặc bộ lọc."
+                : $"Hiển thị {_deviceView.Count} / {_devices.Count} thiết bị";
+        }
+
+        private void DeviceSearch_Changed(object sender, TextChangedEventArgs e) => RefreshDeviceFilter();
+        private void DeviceFilter_Changed(object sender, SelectionChangedEventArgs e) => RefreshDeviceFilter();
+
+        private void DeviceCard_KeyDown(object sender, KeyEventArgs e)
+        {
+            if ((e.Key == Key.Enter || e.Key == Key.Space) &&
+                sender is FrameworkElement { DataContext: DeviceItem device })
+            {
+                SelectDevice(device);
+                e.Handled = true;
+            }
+        }
+
+        private void UpdateCommandAvailability()
+        {
+            if (QuickControls == null || AdvancedControls == null || BtnSendCmd == null) return;
+            var enabled = _mqttController.IsConnected && _selectedDevice?.IsOnline == true && !_commandBusy;
+            QuickControls.IsEnabled = enabled;
+            AdvancedControls.IsEnabled = enabled;
+            BtnSendCmd.IsEnabled = enabled;
+            if (!_commandBusy && !enabled)
+                LblCommandStatus.Text = !_mqttController.IsConnected
+                    ? "Kết nối broker để bắt đầu điều khiển."
+                    : "Thiết bị offline. Hãy kiểm tra trình giả lập.";
+            else if (enabled && (LblCommandStatus.Text.StartsWith("Kết nối broker") ||
+                                 LblCommandStatus.Text.StartsWith("Thiết bị offline")))
+                LblCommandStatus.Text = "Sẵn sàng nhận lệnh";
+        }
+
         private void UpdateKpis()
         {
             int total = _devices.Count;
@@ -443,6 +503,8 @@ namespace UDM_21.Dashboard
             TxtKpiOnline.Text = online.ToString();
             TxtKpiWarning.Text = warning.ToString();
             TxtKpiOffline.Text = offline.ToString();
+            RefreshDeviceFilter();
+            UpdateCommandAvailability();
         }
 
         #endregion
@@ -462,6 +524,7 @@ namespace UDM_21.Dashboard
             RefreshDetailView(dev);
 
             UpdatePresetCommandsForDevice(dev);
+            UpdateCommandAvailability();
         }
 
         private void RefreshDetailView(DeviceItem dev)
@@ -497,7 +560,7 @@ namespace UDM_21.Dashboard
             if (!ReferenceEquals(IcDetailMetrics.ItemsSource, dev.DetailedMetrics))
                 IcDetailMetrics.ItemsSource = dev.DetailedMetrics;
 
-            TxtControlDeviceTitle.Text = "Điều khiển";
+            TxtControlDeviceTitle.Text = "Điều khiển thiết bị";
 
             PanelCtrlLight.Visibility = (dev.DeviceId == "smart_light_01") ? Visibility.Visible : Visibility.Collapsed;
             PanelCtrlDoor.Visibility = (dev.DeviceId == "door_sensor_01") ? Visibility.Visible : Visibility.Collapsed;
@@ -561,6 +624,14 @@ namespace UDM_21.Dashboard
                 return;
             }
 
+            if (_commandBusy) return;
+            if (!_mqttController.IsConnected || !_selectedDevice.IsOnline)
+            {
+                LblCommandStatus.Text = "Cần kết nối broker và chờ thiết bị online để gửi lệnh.";
+                return;
+            }
+            _commandBusy = true;
+            UpdateCommandAvailability();
             var targetDevice = _selectedDevice;
             parameters ??= new Dictionary<string, object>();
             LblCommandStatus.Text = "Đang gửi lệnh...";
@@ -576,7 +647,7 @@ namespace UDM_21.Dashboard
                     parameters);
 
                 LogEvent("CMD", $"Đã gửi lệnh '{command}' tới {targetDevice.DisplayName} ({targetDevice.DeviceId})");
-                LblCommandStatus.Text = $"Gửi thành công: {command}";
+                LblCommandStatus.Text = $"Đã publish tới {targetDevice.DisplayName}: {command}. Theo dõi dữ liệu để xác nhận thay đổi.";
                 LblCommandStatus.Foreground = Brushes.Green;
             }
             catch (Exception ex)
@@ -585,6 +656,11 @@ namespace UDM_21.Dashboard
                 LblCommandStatus.Text = $"Lỗi: {ex.Message}";
                 LblCommandStatus.Foreground = Brushes.Red;
                 ShowError($"Không thể thực thi lệnh: {ex.Message}");
+            }
+            finally
+            {
+                _commandBusy = false;
+                UpdateCommandAvailability();
             }
         }
 
@@ -674,51 +750,23 @@ namespace UDM_21.Dashboard
         private void BtnClimateCalibrate_Click(object sender, RoutedEventArgs e) =>
             ExecuteDeviceCommand("CALIBRATE");
 
-        private async void BtnSendCmd_Click(object sender, RoutedEventArgs e)
+        private void BtnSendCmd_Click(object sender, RoutedEventArgs e)
         {
-            if (_selectedDevice == null)
+            var command = TxtCommand.Text.Trim();
+            if (string.IsNullOrWhiteSpace(command))
             {
-                ShowError("Vui lòng chọn thiết bị!");
+                ShowError("Vui lòng nhập tên lệnh.");
                 return;
             }
-
-            string cmd = TxtCommand.Text.Trim();
-            if (string.IsNullOrWhiteSpace(cmd))
-            {
-                ShowError("Tên lệnh không được để trống.");
-                return;
-            }
-
-            BtnSendCmd.IsEnabled = false;
-            LblCommandStatus.Text = "Đang gửi lệnh...";
-            LblCommandStatus.Foreground = Brushes.DarkOrange;
-
             try
             {
-                var paramsDict = JsonConvert.DeserializeObject<Dictionary<string, object>>(TxtParams.Text.Trim())
+                var parameters = JsonConvert.DeserializeObject<Dictionary<string, object>>(TxtParams.Text.Trim())
                     ?? new Dictionary<string, object>();
-
-                await _mqttController.SendCommandAsync(
-                    _selectedDevice.Location,
-                    _selectedDevice.DeviceType,
-                    _selectedDevice.DeviceId,
-                    cmd,
-                    paramsDict);
-
-                LogEvent("CMD", $"Gửi lệnh tùy chỉnh tới {_selectedDevice.DisplayName}: {cmd}");
-                LblCommandStatus.Text = $"Gửi thành công: {cmd}";
-                LblCommandStatus.Foreground = Brushes.Green;
+                ExecuteDeviceCommand(command, parameters);
             }
-            catch (Exception ex)
+            catch (JsonException)
             {
-                AppLogger.Error("DASHBOARD_COMMAND_FAILED", ex);
-                LblCommandStatus.Text = $"Gửi thất bại: {ex.Message}";
-                LblCommandStatus.Foreground = Brushes.Red;
-                ShowError($"Không thể gửi lệnh: {ex.Message}");
-            }
-            finally
-            {
-                BtnSendCmd.IsEnabled = _mqttController.IsConnected;
+                ShowError("Tham số chưa đúng định dạng JSON. Ví dụ: {\"state\": \"ON\"}");
             }
         }
 
