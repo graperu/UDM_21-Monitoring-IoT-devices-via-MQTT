@@ -32,6 +32,8 @@ namespace UDM_21.Dashboard
         private long _lastReportedDropCount;
         private DeviceItem? _selectedDevice;
         private bool _allowClose;
+        private bool _connectionBusy;
+        private bool _chartsPaused;
         private bool _chartWorkspaceExpanded;
         private GridLength _savedSidebarWidth = new GridLength(350);
         private bool _exportingHistory;
@@ -171,7 +173,9 @@ namespace UDM_21.Dashboard
             if (isConnecting)
             {
                 BtnConnect.Visibility = Visibility.Visible;
-                BtnDisconnect.Visibility = Visibility.Collapsed;
+                BtnDisconnect.Visibility = Visibility.Visible;
+                BtnDisconnect.Content = "Dừng thử lại";
+                BtnDisconnect.IsEnabled = !_connectionBusy;
                 BtnConnect.IsEnabled = false;
                 BtnConnect.Content = "Đang kết nối...";
                 DotBrokerStatus.Fill = new SolidColorBrush(Color.FromRgb(0xF5, 0x9E, 0x0B));
@@ -182,6 +186,7 @@ namespace UDM_21.Dashboard
                 BtnConnect.Visibility = Visibility.Collapsed;
                 BtnDisconnect.Visibility = Visibility.Visible;
                 BtnDisconnect.IsEnabled = true;
+                BtnDisconnect.Content = "Ngắt kết nối";
                 DotBrokerStatus.Fill = new SolidColorBrush(Color.FromRgb(0x16, 0xA3, 0x4A));
                 BrokerStatusBadge.Background = new SolidColorBrush(Color.FromRgb(0xDC, 0xFC, 0xE7));
             }
@@ -200,6 +205,7 @@ namespace UDM_21.Dashboard
 
         private async void BtnConnect_Click(object sender, RoutedEventArgs e)
         {
+            if (_connectionBusy || _isClosing) return;
             var host = TxtHost.Text.Trim();
             if (string.IsNullOrWhiteSpace(host))
             {
@@ -213,6 +219,25 @@ namespace UDM_21.Dashboard
                 return;
             }
 
+            var useTls = ChkTls.IsChecked == true;
+            if (host.Equals("broker.emqx.io", StringComparison.OrdinalIgnoreCase) &&
+                ((port == 1883 && useTls) || (port == 8883 && !useTls)))
+            {
+                ShowError("Cấu hình EMQX không khớp: cổng 1883 cần tắt TLS; cổng 8883 cần bật TLS.");
+                DrawerConfig.Visibility = Visibility.Visible;
+                return;
+            }
+            try
+            {
+                MqttTopics.NormalizeRoot(TxtTopicRoot.Text.Trim());
+                new MqttConnectionSettings { Host = host, Port = port, UseTls = useTls,
+                    Username = TxtUsername.Text.Trim(), Password = TxtPassword.Password }.Validate();
+            }
+            catch (ArgumentException ex) { ShowError(ex.Message); return; }
+
+            _connectionBusy = true;
+            DrawerConfig.IsEnabled = false;
+            DrawerConfig.Visibility = Visibility.Collapsed;
             UpdateConnectionUiState(isConnected: false, isConnecting: true);
             try
             {
@@ -240,10 +265,18 @@ namespace UDM_21.Dashboard
                 UpdateConnectionUiState(isConnected: false, isConnecting: false);
                 ShowError($"Không thể kết nối MQTT Broker: {ex.Message}");
             }
+            finally
+            {
+                _connectionBusy = false;
+                DrawerConfig.IsEnabled = true;
+                BtnDisconnect.IsEnabled = true;
+            }
         }
 
         private async void BtnDisconnect_Click(object sender, RoutedEventArgs e)
         {
+            if (_connectionBusy || _isClosing) return;
+            _connectionBusy = true;
             UpdateConnectionUiState(isConnected: false, isConnecting: true);
             try
             {
@@ -256,6 +289,7 @@ namespace UDM_21.Dashboard
             }
             finally
             {
+                _connectionBusy = false;
                 UpdateConnectionUiState(isConnected: false, isConnecting: false);
             }
         }
@@ -288,20 +322,9 @@ namespace UDM_21.Dashboard
                 : Visibility.Visible;
         }
 
-        private async void BtnSaveAndReconnect_Click(object sender, RoutedEventArgs e)
+        private void BtnSaveAndReconnect_Click(object sender, RoutedEventArgs e)
         {
-            DrawerConfig.Visibility = Visibility.Collapsed;
-            if (_mqttController.IsConnected)
-            {
-                try
-                {
-                    await _mqttController.DisconnectAsync();
-                }
-                catch (Exception ex)
-                {
-                    AppLogger.Warning("RECONNECT_DISCONNECT_WARN", ex.Message);
-                }
-            }
+            // ConnectAsync already stops the previous connection/retry loop after validation.
             BtnConnect_Click(sender, e);
         }
 
@@ -1050,27 +1073,29 @@ namespace UDM_21.Dashboard
         private void TrackChartTelemetry(TelemetryMessage msg)
         {
             List<(DateTime Timestamp, double Value)>? buffer = null;
+            var sampleTime = MessageValidator.TryParseUtcTimestamp(msg.Timestamp, out var parsedTime)
+                ? parsedTime.LocalDateTime : DateTime.Now;
 
             if (msg.DeviceId == ChartDeviceIdTemp &&
                 msg.Data.TryGetValue("temperature", out var tObj) &&
                 MessageValidator.TryGetFiniteDouble(tObj, out double t))
             {
                 buffer = _chartPointsTemp;
-                buffer.Add((DateTime.Now, t));
+                buffer.Add((sampleTime, t));
             }
             else if (msg.DeviceId == ChartDeviceIdPower &&
                 msg.Data.TryGetValue("power_watt", out var pObj) &&
                 MessageValidator.TryGetFiniteDouble(pObj, out double p))
             {
                 buffer = _chartPointsPower;
-                buffer.Add((DateTime.Now, p));
+                buffer.Add((sampleTime, p));
             }
             else if (msg.DeviceId == ChartDeviceIdAqi &&
                 msg.Data.TryGetValue("aqi", out var aObj) &&
                 MessageValidator.TryGetFiniteDouble(aObj, out double a))
             {
                 buffer = _chartPointsAqi;
-                buffer.Add((DateTime.Now, a));
+                buffer.Add((sampleTime, a));
             }
 
             if (buffer == null) return;
@@ -1109,8 +1134,19 @@ namespace UDM_21.Dashboard
             }
         }
 
+        private void PauseCharts_Click(object sender, RoutedEventArgs e)
+        {
+            _chartsPaused = !_chartsPaused;
+            BtnPauseCharts.Content = _chartsPaused ? "Tiếp tục biểu đồ" : "Tạm dừng biểu đồ";
+            BtnPauseCharts.ToolTip = _chartsPaused
+                ? "Biểu đồ đang tạm dừng. Dữ liệu MQTT và lịch sử vẫn cập nhật."
+                : "Chỉ dừng vẽ biểu đồ; dữ liệu MQTT và lịch sử vẫn cập nhật.";
+            if (!_chartsPaused) RenderCharts();
+        }
+
         private void RenderCharts()
         {
+            if (_chartsPaused) return;
             _chartsDirty = false;
 
             ChartTemperature.SetSeries(
