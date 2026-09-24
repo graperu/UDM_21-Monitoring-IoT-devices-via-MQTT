@@ -4,7 +4,7 @@
         <BooleanToVisibilityConverter x:Key="BoolToVisConverter"/>
     </Window.Resources>
 
-    <ScrollViewer x:Name="WindowViewport" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" CanContentScroll="False" Focusable="False"><Grid MinWidth="1240" MinHeight="760" Width="{Binding ViewportWidth, ElementName=WindowViewport}" Height="{Binding ViewportHeight, ElementName=WindowViewport}" HorizontalAlignment="Left" VerticalAlignment="Top">
+    <ScrollViewer x:Name="WindowViewport" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" CanContentScroll="False" Focusable="False"><Grid MinWidth="1000" MinHeight="680" Width="{Binding ViewportWidth, ElementName=WindowViewport}" Height="{Binding ViewportHeight, ElementName=WindowViewport}" HorizontalAlignment="Left" VerticalAlignment="Top">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/> <!-- 0: Simplified Top Bar -->
             <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/> <!-- 1: Collapsible Connection Settings -->
@@ -47,7 +47,7 @@
             </DockPanel>
         </Border>
 
-        <Grid Grid.Row="2" Margin="20,16,20,16"><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><StackPanel Margin="0,0,0,12"><TextBlock Text="Tổng quan hệ thống" FontSize="24" FontWeight="Bold" Foreground="{StaticResource TextPrimaryBrush}"/><TextBlock Text="Theo dõi tín hiệu, phát hiện cảnh báo và điều khiển thiết bị tại một nơi." Foreground="{StaticResource TextSecondaryBrush}" Margin="0,4,0,0" FontSize="13"/></StackPanel><UniformGrid Grid.Row="1" Columns="4"><Button Click="SummaryFilter_Click" Height="Auto" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch" Tag="0" ToolTip="Hiển thị tất cả thiết bị" AutomationProperties.Name="Hiển thị tất cả thiết bị" Margin="0,0,10,0"><Button.Template><ControlTemplate TargetType="Button"><Border x:Name="FocusBorder0" Background="Transparent" CornerRadius="12"><ContentPresenter HorizontalAlignment="Stretch" VerticalAlignment="Stretch"/></Border><ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="FocusBorder0" Property="Opacity" Value="0.85"/></Trigger><Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="FocusBorder0" Property="BorderBrush" Value="#2563EB"/><Setter TargetName="FocusBorder0" Property="BorderThickness" Value="2"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Button.Template><Border Background="White" CornerRadius="12" BorderBrush="#E2E8F0" BorderThickness="1" Padding="16,12" Margin="0" x:Name="SummaryCard0"><StackPanel><TextBlock Text="Thiết bị" FontSize="13" Foreground="#475569"/><TextBlock Text="{Binding Text, ElementName=TxtKpiTotal}" FontSize="28" FontWeight="Bold" Foreground="#2563EB" Margin="0,4,0,2"/><TextBlock Text="Trong hệ thống" FontSize="12" Foreground="#64748B"/></StackPanel></Border></Button><Button Click="SummaryFilter_Click" Height="Auto" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch" Tag="1" ToolTip="Chỉ hiển thị thiết bị online" AutomationProperties.Name="Chỉ hiển thị thiết bị online" Margin="0,0,10,0"><Button.Template><ControlTemplate TargetType="Button"><Border x:Name="FocusBorder1" Background="Transparent" CornerRadius="12"><ContentPresenter HorizontalAlignment="Stretch" VerticalAlignment="Stretch"/></Border><ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="FocusBorder1" Property="Opacity" Value="0.85"/></Trigger><Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="FocusBorder1" Property="BorderBrush" Value="#2563EB"/><Setter TargetName="FocusBorder1" Property="BorderThickness" Value="2"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Button.Template><Border Background="White" CornerRadius="12" BorderBrush="#E2E8F0" BorderThickness="1" Padding="16,12" Margin="0" x:Name="SummaryCard1"><StackPanel><TextBlock Text="Đang online" FontSize="13" Foreground="#475569"/><TextBlock Text="{Binding Text, ElementName=TxtKpiOnline}" FontSize="28" FontWeight="Bold" Foreground="#047857" Margin="0,4,0,2"/><TextBlock Text="Đã nhận trạng thái online" FontSize="12" Foreground="#64748B"/></StackPanel></Border></Button><Button Click="SummaryFilter_Click" Height="Auto" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch" Tag="2" ToolTip="Chỉ hiển thị thiết bị có cảnh báo" AutomationProperties.Name="Chỉ hiển thị thiết bị có cảnh báo" Margin="0,0,10,0"><Button.Template><ControlTemplate TargetType="Button"><Border x:Name="FocusBorder2" Background="Transparent" CornerRadius="12"><ContentPresenter HorizontalAlignment="Stretch" VerticalAlignment="Stretch"/></Border><ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="FocusBorder2" Property="Opacity" Value="0.85"/></Trigger><Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="FocusBorder2" Property="BorderBrush" Value="#2563EB"/><Setter TargetName="FocusBorder2" Property="BorderThickness" Value="2"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Button.Template><Border Background="White" CornerRadius="12" BorderBrush="#E2E8F0" BorderThickness="1" Padding="16,12" Margin="0" x:Name="SummaryCard2"><StackPanel><TextBlock Text="Có cảnh báo" FontSize="13" Foreground="#475569"/><TextBlock Text="{Binding Text, ElementName=TxtKpiWarning}" FontSize="28" FontWeight="Bold" Foreground="#B45309" Margin="0,4,0,2"/><TextBlock Text="Giá trị đo cần kiểm tra" FontSize="12" Foreground="#64748B"/></StackPanel></Border></Button><Button Click="SummaryFilter_Click" Height="Auto" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch" Tag="3" ToolTip="Chỉ hiển thị thiết bị offline" AutomationProperties.Name="Chỉ hiển thị thiết bị offline" Margin="0,0,10,0"><Button.Template><ControlTemplate TargetType="Button"><Border x:Name="FocusBorder3" Background="Transparent" CornerRadius="12"><ContentPresenter HorizontalAlignment="Stretch" VerticalAlignment="Stretch"/></Border><ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="FocusBorder3" Property="Opacity" Value="0.85"/></Trigger><Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="FocusBorder3" Property="BorderBrush" Value="#2563EB"/><Setter TargetName="FocusBorder3" Property="BorderThickness" Value="2"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Button.Template><Border Background="White" CornerRadius="12" BorderBrush="#E2E8F0" BorderThickness="1" Padding="16,12" Margin="0" x:Name="SummaryCard3"><StackPanel><TextBlock Text="Đang offline" FontSize="13" Foreground="#475569"/><TextBlock Text="{Binding Text, ElementName=TxtKpiOffline}" FontSize="28" FontWeight="Bold" Foreground="#64748B" Margin="0,4,0,2"/><TextBlock Text="Chưa có tín hiệu / mất kết nối" FontSize="12" Foreground="#64748B"/></StackPanel></Border></Button></UniformGrid></Grid><!-- ===================================================================
+        <Grid Grid.Row="2" Margin="16,10,16,10"><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><UniformGrid Grid.Row="0" Columns="4"><Button Click="SummaryFilter_Click" Height="Auto" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch" Tag="0" ToolTip="Hiển thị tất cả thiết bị" AutomationProperties.Name="Hiển thị tất cả thiết bị" Margin="0,0,10,0"><Button.Template><ControlTemplate TargetType="Button"><Border x:Name="FocusBorder0" Background="Transparent" CornerRadius="12"><ContentPresenter HorizontalAlignment="Stretch" VerticalAlignment="Stretch"/></Border><ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="FocusBorder0" Property="Opacity" Value="0.85"/></Trigger><Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="FocusBorder0" Property="BorderBrush" Value="#2563EB"/><Setter TargetName="FocusBorder0" Property="BorderThickness" Value="2"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Button.Template><Border Background="White" CornerRadius="12" BorderBrush="#E2E8F0" BorderThickness="1" Padding="12,8" Margin="0" x:Name="SummaryCard0"><DockPanel><TextBlock Text="{Binding Text, ElementName=TxtKpiTotal}" FontSize="24" FontWeight="Bold" Foreground="#2563EB" Margin="12,0,0,0" DockPanel.Dock="Right"/><TextBlock Text="Thiết bị" FontSize="13" Foreground="#475569" VerticalAlignment="Center"/></DockPanel></Border></Button><Button Click="SummaryFilter_Click" Height="Auto" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch" Tag="1" ToolTip="Chỉ hiển thị thiết bị online" AutomationProperties.Name="Chỉ hiển thị thiết bị online" Margin="0,0,10,0"><Button.Template><ControlTemplate TargetType="Button"><Border x:Name="FocusBorder1" Background="Transparent" CornerRadius="12"><ContentPresenter HorizontalAlignment="Stretch" VerticalAlignment="Stretch"/></Border><ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="FocusBorder1" Property="Opacity" Value="0.85"/></Trigger><Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="FocusBorder1" Property="BorderBrush" Value="#2563EB"/><Setter TargetName="FocusBorder1" Property="BorderThickness" Value="2"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Button.Template><Border Background="White" CornerRadius="12" BorderBrush="#E2E8F0" BorderThickness="1" Padding="12,8" Margin="0" x:Name="SummaryCard1"><DockPanel><TextBlock Text="{Binding Text, ElementName=TxtKpiOnline}" FontSize="24" FontWeight="Bold" Foreground="#047857" Margin="12,0,0,0" DockPanel.Dock="Right"/><TextBlock Text="Đang online" FontSize="13" Foreground="#475569" VerticalAlignment="Center"/></DockPanel></Border></Button><Button Click="SummaryFilter_Click" Height="Auto" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch" Tag="2" ToolTip="Chỉ hiển thị thiết bị có cảnh báo" AutomationProperties.Name="Chỉ hiển thị thiết bị có cảnh báo" Margin="0,0,10,0"><Button.Template><ControlTemplate TargetType="Button"><Border x:Name="FocusBorder2" Background="Transparent" CornerRadius="12"><ContentPresenter HorizontalAlignment="Stretch" VerticalAlignment="Stretch"/></Border><ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="FocusBorder2" Property="Opacity" Value="0.85"/></Trigger><Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="FocusBorder2" Property="BorderBrush" Value="#2563EB"/><Setter TargetName="FocusBorder2" Property="BorderThickness" Value="2"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Button.Template><Border Background="White" CornerRadius="12" BorderBrush="#E2E8F0" BorderThickness="1" Padding="12,8" Margin="0" x:Name="SummaryCard2"><DockPanel><TextBlock Text="{Binding Text, ElementName=TxtKpiWarning}" FontSize="24" FontWeight="Bold" Foreground="#B45309" Margin="12,0,0,0" DockPanel.Dock="Right"/><TextBlock Text="Có cảnh báo" FontSize="13" Foreground="#475569" VerticalAlignment="Center"/></DockPanel></Border></Button><Button Click="SummaryFilter_Click" Height="Auto" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch" Tag="3" ToolTip="Chỉ hiển thị thiết bị offline" AutomationProperties.Name="Chỉ hiển thị thiết bị offline" Margin="0,0,10,0"><Button.Template><ControlTemplate TargetType="Button"><Border x:Name="FocusBorder3" Background="Transparent" CornerRadius="12"><ContentPresenter HorizontalAlignment="Stretch" VerticalAlignment="Stretch"/></Border><ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="FocusBorder3" Property="Opacity" Value="0.85"/></Trigger><Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="FocusBorder3" Property="BorderBrush" Value="#2563EB"/><Setter TargetName="FocusBorder3" Property="BorderThickness" Value="2"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Button.Template><Border Background="White" CornerRadius="12" BorderBrush="#E2E8F0" BorderThickness="1" Padding="12,8" Margin="0" x:Name="SummaryCard3"><DockPanel><TextBlock Text="{Binding Text, ElementName=TxtKpiOffline}" FontSize="24" FontWeight="Bold" Foreground="#64748B" Margin="12,0,0,0" DockPanel.Dock="Right"/><TextBlock Text="Đang offline" FontSize="13" Foreground="#475569" VerticalAlignment="Center"/></DockPanel></Border></Button></UniformGrid></Grid><!-- ===================================================================
              ROW 1: COLLAPSIBLE CONNECTION SETTINGS DRAWER
              Contains host, port, topic root, credentials for presentation/grading
              =================================================================== -->
@@ -85,27 +85,8 @@
         <!-- ===================================================================
              ROW 2: MAIN WORKSPACE (UPPER 3-AREA + LOWER TABS)
              =================================================================== -->
-        <Grid Grid.Row="3" Margin="20,0,20,16">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="1.35*" MinHeight="250"/>  <!-- Upper 3-Area: Danh Sách | Thông Tin | Điều Khiển -->
-                <RowDefinition Height="6" MinHeight="6" MaxHeight="6"/>    <!-- GridSplitter -->
-                <RowDefinition Height="*" MinHeight="180"/>    <!-- Lower Tabs: Thiết Bị | Lịch Sử | Nhật Ký | Kỹ Thuật -->
-            </Grid.RowDefinitions>
-
-            <!-- ===========================================================
-                 UPPER 3-AREA WORKSPACE: LEFT (LIST) | CENTER (DETAIL) | RIGHT (CONTROL)
-                 =========================================================== -->
-            <Grid Grid.Row="0">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="330"/> <!-- Left: Danh sách thiết bị -->
-                    <ColumnDefinition Width="*" MinWidth="340"/>   <!-- Center: Thông tin thiết bị đang chọn -->
-                    <ColumnDefinition Width="340"/> <!-- Right: Điều khiển thiết bị -->
-                </Grid.ColumnDefinitions>
-
-                <!-- =======================================================
-                     AREA 1 (LEFT): DANH SÁCH THIẾT BỊ (COMPACT LIST)
-                     ======================================================= -->
-                <Border Grid.Column="0" Background="#FFFFFF" BorderBrush="{StaticResource PanelBorderBrush}" BorderThickness="1" CornerRadius="8">
+        <Grid Grid.Row="3" Margin="16,0,16,12">
+            <Grid.ColumnDefinitions><ColumnDefinition x:Name="SidebarColumn" Width="350" MinWidth="280"/><ColumnDefinition x:Name="ResizeColumn" Width="10"/><ColumnDefinition Width="*" MinWidth="540"/></Grid.ColumnDefinitions><ScrollViewer x:Name="DeviceSidebar" Grid.Column="0" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"><StackPanel><Border Background="#FFFFFF" BorderBrush="{StaticResource PanelBorderBrush}" BorderThickness="1" CornerRadius="8" Margin="0,0,0,10" Height="300">
                     <Grid>
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto"/> <!-- Header + KPI counter -->
@@ -196,11 +177,7 @@
                     </Grid>
                 </Border>
 
-                <!-- =======================================================
-                     AREA 2 (CENTER): THÔNG TIN THIẾT BỊ ĐANG CHỌN (SIMPLE DETAIL)
-                     Strict LABEL | VALUE format. No fake descriptions.
-                     ======================================================= -->
-                <Border Grid.Column="1" Background="#FFFFFF" BorderBrush="{StaticResource PanelBorderBrush}" BorderThickness="1" CornerRadius="8" Margin="6,0" Padding="12">
+                <Border Background="#FFFFFF" BorderBrush="{StaticResource PanelBorderBrush}" BorderThickness="1" CornerRadius="8" Margin="0,0,0,10" Padding="12" Height="390">
                     <Grid x:Name="PanelDeviceDetail">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto"/> <!-- Header: Name & Status Badge -->
@@ -256,10 +233,7 @@
                     </Grid>
                 </Border>
 
-                <!-- =======================================================
-                     AREA 3 (RIGHT): ĐIỀU KHIỂN THIẾT BỊ (SIMPLE CONTROLS)
-                     ======================================================= -->
-                <Border Grid.Column="2" Background="#FFFFFF" BorderBrush="{StaticResource PanelBorderBrush}" BorderThickness="1" CornerRadius="8" Padding="12">
+                <Border Background="#FFFFFF" BorderBrush="{StaticResource PanelBorderBrush}" BorderThickness="1" CornerRadius="8" Padding="12" Margin="0,0,0,10">
                     <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"><Grid>
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto"/> <!-- Title & Feedback -->
@@ -408,18 +382,7 @@
                         </Expander>
                     </Grid>
                 </ScrollViewer></Border>
-            </Grid>
-
-            <!-- ===========================================================
-                 SPLITTER
-                 =========================================================== -->
-            <GridSplitter Grid.Row="1" Height="4" HorizontalAlignment="Stretch" VerticalAlignment="Center" Background="#E2E8F0" Cursor="SizeNS"/>
-
-            <!-- ===========================================================
-                 LOWER WORKSPACE: 4 TABS FOR ALL SYSTEM DATA
-                 Tab titles: Thiết bị | Lịch sử | Nhật ký | Thông tin kỹ thuật
-                 =========================================================== -->
-            <TabControl x:Name="MainTabs" Grid.Row="2" SelectedIndex="1">
+            </StackPanel></ScrollViewer><GridSplitter x:Name="WorkspaceSplitter" Grid.Column="1" Width="8" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" ResizeDirection="Columns" ResizeBehavior="PreviousAndNext" ShowsPreview="True" Background="#CBD5E1" Cursor="SizeWE" ToolTip="Kéo trái / phải để đổi độ rộng biểu đồ"/><Grid Grid.Column="2"><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions><Border x:Name="GlobalAlertBanner" Grid.Row="0" Background="#EFF6FF" BorderBrush="#BFDBFE" BorderThickness="1" CornerRadius="8" Padding="10" Margin="0,0,0,8"><DockPanel><Button DockPanel.Dock="Right" Content="Xem thiết bị" Click="ShowAttentionDevices_Click" Margin="8,0,0,0"/><ScrollViewer VerticalScrollBarVisibility="Auto" MaxHeight="70"><TextBlock x:Name="TxtGlobalAlert" Text="Đang chờ trạng thái thiết bị…" TextWrapping="Wrap" Foreground="#1E3A8A" FontSize="13"/></ScrollViewer></DockPanel></Border><TabControl x:Name="MainTabs" SelectedIndex="1" Grid.Row="1">
                 <!-- =======================================================
                      TAB 1: THIẾT BỊ (BẢNG TELEMETRY TỔNG HỢP)
                      ======================================================= -->
@@ -449,41 +412,28 @@
                      TAB 1B: BIỂU ĐỒ XU HƯỚNG (NHIỆT ĐỘ, CÔNG SUẤT, AQI)
                      ======================================================= -->
                 <TabItem x:Name="TabCharts" Header="Biểu đồ">
-                    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"><Grid Background="#FFFFFF" MinHeight="230">
+                    <Grid Background="#FFFFFF">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="*"/>
                         </Grid.RowDefinitions>
 
                         <Border Grid.Row="0" Background="#F8FAFC" BorderBrush="{StaticResource SubtleBorderBrush}" BorderThickness="0,0,0,1" Padding="10,6">
-                            <DockPanel LastChildFill="False">
-                                <StackPanel Orientation="Horizontal" DockPanel.Dock="Left" VerticalAlignment="Center">
-                                    <TextBlock Text="Hiển thị:" FontWeight="SemiBold" FontSize="12" VerticalAlignment="Center" Margin="0,0,8,0" Foreground="{StaticResource TextSecondaryBrush}"/>
-                                    <ComboBox x:Name="CmbChartRange" Width="180" Height="26" SelectionChanged="CmbChartRange_SelectionChanged">
+                            <WrapPanel><TextBlock Text="Theo dõi trực tiếp" FontWeight="Bold" FontSize="15" Margin="0,0,14,6" VerticalAlignment="Center"/><ComboBox x:Name="CmbChartRange" Width="150" Height="26" SelectionChanged="CmbChartRange_SelectionChanged" Margin="0,0,8,6">
                                         <ComboBoxItem Content="20 điểm gần nhất" Tag="20"/>
                                         <ComboBoxItem Content="50 điểm gần nhất" Tag="50"/>
                                         <ComboBoxItem Content="100 điểm gần nhất" Tag="100"/>
                                         <ComboBoxItem Content="200 điểm gần nhất" Tag="200"/>
                                     </ComboBox>
-                                    <Button Content="Làm Mới" Height="30" Padding="10,2" Margin="8,0,0,0" Click="BtnRefreshCharts_Click"/>
-                                </StackPanel>
-                                <TextBlock DockPanel.Dock="Right" Text="Đường đứt màu đỏ là ngưỡng cảnh báo của từng chỉ số" FontSize="12" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center"/>
-                            </DockPanel>
-                        </Border>
+                                    <ComboBox x:Name="CmbChartFocus" SelectedIndex="0" Width="150" Height="28" Margin="0,0,8,6" SelectionChanged="ChartFocus_Changed" ToolTip="Chọn một chỉ số để xem biểu đồ lớn"><ComboBoxItem Content="Tất cả chỉ số"/><ComboBoxItem Content="Nhiệt độ"/><ComboBoxItem Content="Công suất"/><ComboBoxItem Content="Chất lượng khí"/></ComboBox><Button x:Name="BtnFocusWorkspace" Content="Mở rộng biểu đồ" Click="ToggleChartWorkspace_Click" Height="28" Margin="0,0,8,6"/><Button Content="Làm mới" Click="BtnRefreshCharts_Click" Height="28" Margin="0,0,0,6"/></WrapPanel></Border>
 
-                        <Grid Grid.Row="1" Margin="8">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="*"/>
-                            </Grid.ColumnDefinitions>
-
-                            <controls:TrendChartControl x:Name="ChartTemperature" Grid.Column="0" Margin="4"/>
-                            <controls:TrendChartControl x:Name="ChartPower" Grid.Column="1" Margin="4"/>
-                            <controls:TrendChartControl x:Name="ChartAqi" Grid.Column="2" Margin="4"/>
-                        </Grid>
+                        <Grid Grid.Row="1" Margin="8" x:Name="ChartLayout">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><Grid.RowDefinitions><RowDefinition Height="*" MinHeight="160"/><RowDefinition Height="10"/><RowDefinition Height="*" MinHeight="160"/></Grid.RowDefinitions><controls:TrendChartControl x:Name="ChartTemperature" Grid.Column="0" Margin="4" Grid.Row="0" Grid.ColumnSpan="2"/>
+                            <controls:TrendChartControl x:Name="ChartPower" Grid.Column="0" Margin="4" Grid.Row="2" Grid.ColumnSpan="1"/>
+                            <controls:TrendChartControl x:Name="ChartAqi" Grid.Column="1" Margin="4" Grid.Row="2" Grid.ColumnSpan="1"/>
+                        <GridSplitter x:Name="ChartRowSplitter" Grid.Row="1" Grid.ColumnSpan="2" Height="8" HorizontalAlignment="Stretch" VerticalAlignment="Center" ResizeDirection="Rows" ResizeBehavior="PreviousAndNext" ShowsPreview="True" Background="#CBD5E1" Cursor="SizeNS" ToolTip="Kéo lên / xuống để đổi chiều cao các biểu đồ"/></Grid>
                     </Grid>
-                </ScrollViewer></TabItem>
+                </TabItem>
 
                 <!-- =======================================================
                      TAB 2: LỊCH SỬ (SQLITE TELEMETRY)
@@ -719,6 +669,6 @@
                     </Grid>
                 </TabItem>
             </TabControl>
-        </Grid>
+        </Grid></Grid>
     </Grid>
 </ScrollViewer></Window>
