@@ -111,9 +111,11 @@ namespace UDM_21.Dashboard.Controls
             double plotWidth = Math.Max(10, width - leftMargin - rightMargin);
             double plotHeight = Math.Max(10, height - topMargin - bottomMargin);
 
-            double MapX(int index) => _points.Count <= 1
+            double duration = (_points[^1].Timestamp - _points[0].Timestamp).TotalMilliseconds;
+            double MapX(int index) => duration <= 0
                 ? leftMargin + plotWidth / 2
-                : leftMargin + plotWidth * index / (_points.Count - 1);
+                : leftMargin + plotWidth *
+                    (_points[index].Timestamp - _points[0].Timestamp).TotalMilliseconds / duration;
 
             double MapY(double value) => topMargin + plotHeight - (value - minV) / range * plotHeight;
 
@@ -198,7 +200,7 @@ namespace UDM_21.Dashboard.Controls
             };
             ChartCanvas.Children.Add(polyline);
 
-            if (_points.Count <= 80)
+            if (_points.Count <= 200)
             {
                 for (int i = 0; i < _points.Count; i++)
                 {
@@ -208,7 +210,8 @@ namespace UDM_21.Dashboard.Controls
                         Height = 5,
                         Fill = Brushes.White,
                         Stroke = _lineBrush,
-                        StrokeThickness = 1.4
+                        StrokeThickness = 1.4,
+                        ToolTip = $"{_points[i].Timestamp:dd/MM/yyyy HH:mm:ss}\n{_points[i].Value:0.###} {TxtLatestUnit.Text}"
                     };
                     Canvas.SetLeft(dot, MapX(i) - 2.5);
                     Canvas.SetTop(dot, MapY(_points[i].Value) - 2.5);
