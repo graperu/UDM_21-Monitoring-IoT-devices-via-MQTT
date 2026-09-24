@@ -13,7 +13,7 @@ namespace UDM_21.Dashboard.Controls
     public partial class TrendChartControl : UserControl
     {
         private static readonly SolidColorBrush GridBrush = new(Color.FromRgb(0xE5, 0xE7, 0xEB));
-        private static readonly SolidColorBrush AxisTextBrush = new(Color.FromRgb(0x94, 0xA3, 0xB8));
+        private static readonly SolidColorBrush AxisTextBrush = new(Color.FromRgb(0x64, 0x74, 0x8B));
         private static readonly SolidColorBrush ThresholdBrush = new(Color.FromRgb(0xDC, 0x26, 0x26));
 
         private List<(DateTime Timestamp, double Value)> _points = new();
@@ -104,10 +104,10 @@ namespace UDM_21.Dashboard.Controls
             maxV += vPad;
             range = maxV - minV;
 
-            const double leftMargin = 32;
+            const double leftMargin = 48;
             const double rightMargin = 4;
             const double topMargin = 4;
-            const double bottomMargin = 16;
+            const double bottomMargin = 22;
             double plotWidth = Math.Max(10, width - leftMargin - rightMargin);
             double plotHeight = Math.Max(10, height - topMargin - bottomMargin);
 
@@ -135,7 +135,7 @@ namespace UDM_21.Dashboard.Controls
                 var axisLabel = new TextBlock
                 {
                     Text = FormatValue(axisValue),
-                    FontSize = 8.5,
+                    FontSize = 11,
                     Foreground = AxisTextBrush
                 };
                 Canvas.SetLeft(axisLabel, 0);
@@ -163,11 +163,11 @@ namespace UDM_21.Dashboard.Controls
                     var thresholdText = new TextBlock
                     {
                         Text = _thresholdLabel,
-                        FontSize = 8.5,
+                        FontSize = 11,
                         FontWeight = FontWeights.SemiBold,
                         Foreground = ThresholdBrush
                     };
-                    Canvas.SetLeft(thresholdText, Math.Max(leftMargin, leftMargin + plotWidth - 62));
+                    Canvas.SetLeft(thresholdText, Math.Max(leftMargin, leftMargin + plotWidth - 110));
                     Canvas.SetTop(thresholdText, Math.Max(0, ty - 12));
                     ChartCanvas.Children.Add(thresholdText);
                 }
@@ -223,7 +223,7 @@ namespace UDM_21.Dashboard.Controls
                 var timeLabel = new TextBlock
                 {
                     Text = _points[idx].Timestamp.ToString("HH:mm:ss", CultureInfo.InvariantCulture),
-                    FontSize = 8,
+                    FontSize = 10,
                     Foreground = AxisTextBrush
                 };
                 double lx = Math.Max(leftMargin - 4, Math.Min(MapX(idx) - 16, leftMargin + plotWidth - 30));
