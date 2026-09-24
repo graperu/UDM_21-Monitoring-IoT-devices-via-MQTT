@@ -5,7 +5,7 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              mc:Ignorable="d"
              d:DesignHeight="230" d:DesignWidth="380">
-    <Border Background="#FFFFFF" BorderBrush="#E5E7EB" BorderThickness="1" CornerRadius="2" Padding="10,8">
+    <Border Background="#FFFFFF" BorderBrush="#E5E7EB" BorderThickness="1" CornerRadius="10" Padding="10,8">
         <Grid>
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>
@@ -16,7 +16,7 @@
             <DockPanel Grid.Row="0" LastChildFill="False" Margin="0,0,0,4">
                 <StackPanel Orientation="Horizontal" DockPanel.Dock="Left" VerticalAlignment="Center">
                     <Ellipse x:Name="DotSeriesColor" Width="8" Height="8" Fill="#0066CC" Margin="0,0,6,0"/>
-                    <TextBlock x:Name="TxtChartTitle" Text="Xu hướng" FontWeight="Bold" FontSize="11.5" Foreground="#0F172A" VerticalAlignment="Center"/>
+                    <TextBlock x:Name="TxtChartTitle" Text="Xu hướng" FontWeight="Bold" FontSize="13" Foreground="#0F172A" VerticalAlignment="Center"/>
                 </StackPanel>
                 <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" VerticalAlignment="Center">
                     <TextBlock x:Name="TxtLatestValue" Text="--" FontWeight="Bold" FontSize="15" Foreground="#0066CC"/>
@@ -26,17 +26,17 @@
 
             <Grid Grid.Row="1" MinHeight="120">
                 <Canvas x:Name="ChartCanvas" Background="Transparent" ClipToBounds="True" SizeChanged="ChartCanvas_SizeChanged"/>
-                <TextBlock x:Name="TxtNoData" Text="Chưa có dữ liệu lịch sử" FontSize="11" Foreground="#94A3B8"
+                <TextBlock x:Name="TxtNoData" Text="Chưa có dữ liệu lịch sử" FontSize="11" Foreground="#64748B"
                            HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed"/>
             </Grid>
 
             <DockPanel Grid.Row="2" LastChildFill="False" Margin="0,4,0,0">
-                <TextBlock DockPanel.Dock="Left" FontSize="9.5" Foreground="#94A3B8">
+                <TextBlock DockPanel.Dock="Left" FontSize="9.5" Foreground="#64748B">
                     <Run Text="Min: "/><Run x:Name="TxtMinValue" Text="--"/>
                     <Run Text="   TB: "/><Run x:Name="TxtAvgValue" Text="--"/>
                     <Run Text="   Max: "/><Run x:Name="TxtMaxValue" Text="--"/>
                 </TextBlock>
-                <TextBlock x:Name="TxtPointCount" DockPanel.Dock="Right" Text="0 điểm" FontSize="9.5" Foreground="#94A3B8"/>
+                <TextBlock x:Name="TxtPointCount" DockPanel.Dock="Right" Text="0 điểm" FontSize="9.5" Foreground="#64748B"/>
             </DockPanel>
         </Grid>
     </Border>
